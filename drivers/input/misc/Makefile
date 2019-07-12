@@ -86,3 +86,16 @@ obj-$(CONFIG_INPUT_WM831X_ON)		+= wm831x-on.o
 obj-$(CONFIG_INPUT_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
 obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
 obj-$(CONFIG_INPUT_IDEAPAD_SLIDEBAR)	+= ideapad_slidebar.o
+obj-$(CONFIG_INPUT_SX9310)		+= sx9310.o
+obj-$(CONFIG_INPUT_CAPELLA_VCNL36812)	+= vcnl36812.o
+obj-$(CONFIG_INPUT_CAPELLA_VCNL36863)	+= vcnl36863.o
+obj-$(CONFIG_INPUT_STMVL53L1)        += vl53L1/
+obj-$(CONFIG_SENSORS_ICM206XX)		+= icm206xx.o
+
+ccflags-y += -Idrivers/media/platform/msm/camera/cam_utils
+ccflags-y += -Idrivers/media/platform/msm/camera/cam_cpas/include
+ccflags-y += -Idrivers/media/platform/msm/camera/cam_sensor_module/cam_sensor_utils
+ccflags-y += -Idrivers/media/platform/msm/camera/cam_sensor_module/cam_sensor_io
+ccflags-y += -Idrivers/media/platform/msm/camera/cam_sensor_module/cam_cci
+ccflags-y += -Idrivers/media/platform/msm/camera/cam_req_mgr
+ccflags-y += -Idrivers/media/platform/msm/camera/cam_smmu/ 

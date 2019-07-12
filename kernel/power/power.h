@@ -15,6 +15,9 @@ struct swsusp_info {
 	unsigned long		size;
 } __aligned(PAGE_SIZE);
 
+void pmsp_print(void);
+void print_pm_cpuinfo(void);
+
 #ifdef CONFIG_HIBERNATION
 /* kernel/power/snapshot.c */
 extern void __init hibernate_reserved_size_init(void);

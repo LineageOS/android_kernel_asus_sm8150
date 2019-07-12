@@ -536,6 +536,8 @@ static int umh_pipe_setup(struct subprocess_info *info, struct cred *new)
 	return err;
 }
 
+extern int g_coredump_property;
+int dump_count = 3;
 void do_coredump(const siginfo_t *siginfo)
 {
 	struct core_state core_state;
@@ -562,6 +564,19 @@ void do_coredump(const siginfo_t *siginfo)
 		 */
 		.mm_flags = mm->flags,
 	};
+
+	if(g_coredump_property == 1)
+	{
+		printk("[Debug][Coredump] Enter do_coredump by signal %ld\n", siginfo->si_signo);
+
+		if(dump_count <= 1)
+		{
+			dump_count=0;
+			printk("[Debug][Coredump] Exit do_coredump (dump_count %d)\n", dump_count);
+			goto fail;
+		}
+		dump_count --;
+	}
 
 	audit_core_dumps(siginfo->si_signo);
 
@@ -745,6 +760,7 @@ void do_coredump(const siginfo_t *siginfo)
 			goto close_fail;
 		if ((inode->i_mode & 0677) != 0600)
 			goto close_fail;
+
 		if (!(cprm.file->f_mode & FMODE_CAN_WRITE))
 			goto close_fail;
 		if (do_truncate2(cprm.file->f_path.mnt, cprm.file->f_path.dentry, 0, 0, cprm.file))
@@ -757,6 +773,7 @@ void do_coredump(const siginfo_t *siginfo)
 		goto close_fail;
 	if (displaced)
 		put_files_struct(displaced);
+
 	if (!dump_interrupted()) {
 		file_start_write(cprm.file);
 		core_dumped = binfmt->core_dump(&cprm);
@@ -764,6 +781,9 @@ void do_coredump(const siginfo_t *siginfo)
 	}
 	if (ispipe && core_pipe_limit)
 		wait_for_dump_helpers(cprm.file);
+
+	printk("[Debug][Coredump] Dumped Core: Pid %d(%s)\n", task_tgid_vnr(current), current->comm);
+
 close_fail:
 	if (cprm.file)
 		filp_close(cprm.file, NULL);

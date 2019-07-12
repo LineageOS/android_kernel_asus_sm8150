@@ -58,6 +58,19 @@
 #include "console_cmdline.h"
 #include "braille.h"
 #include "internal.h"
+#include <linux/rtc.h>
+
+#include <linux/irq.h>
+#include <linux/wakeup_reason.h>
+
+extern struct timezone sys_tz;
+//ASUS_BSP +++ [PM]Extern values for GPIO, IRQ, SPMI wakeup information for printk.c to Evtlog
+extern int gic_irq_cnt, gic_resume_irq[8];
+//ASUS_BSP --- [PM]Extern values for GPIO, IRQ, SPMI wakeup information for printk.c to Evtlog
+
+//ASUS_BSP +++ [PM]Extern this flag to check dpm_suspend has been callback for resume_console
+extern unsigned int pm_pwrcs_ret;
+//ASUS_BSP --- [PM]Extern this flag to check dpm_suspend has been callback for resume_console
 
 #ifdef CONFIG_EARLY_PRINTK_DIRECT
 extern void printascii(char *);
@@ -77,6 +90,7 @@ int console_printk[4] = {
 int oops_in_progress;
 EXPORT_SYMBOL(oops_in_progress);
 
+int boot_after_60sec = 0;
 /*
  * console_sem protects the console_drivers list, and also
  * provides serialisation for access to the entire console
@@ -440,6 +454,7 @@ static char __log_buf[__LOG_BUF_LEN] __aligned(LOG_ALIGN);
 static char *log_buf = __log_buf;
 static u32 log_buf_len = __LOG_BUF_LEN;
 
+int nSuspendInProgress;
 /* Return log buffer address */
 char *log_buf_addr_get(void)
 {
@@ -1213,11 +1228,27 @@ static inline void boot_delay_msec(int level)
 static bool printk_time = IS_ENABLED(CONFIG_PRINTK_TIME);
 module_param_named(time, printk_time, bool, S_IRUGO | S_IWUSR);
 
+static void myrtc_time_to_tm(unsigned long time, struct rtc_time *tm)
+{
+        tm->tm_hour = time / 3600;
+        time -= tm->tm_hour * 3600;
+        tm->tm_hour %= 24;
+        tm->tm_min = time / 60;
+        tm->tm_sec = time - tm->tm_min * 60;
+}
+
+extern int g_print_die;
+extern int g_print_back_trace;
+extern int g_print_bug_report;
+extern int g_print_warn;
 static size_t print_time(u64 ts, char *buf)
 {
 	unsigned long rem_nsec;
+	struct timespec timespec;
+	struct rtc_time tm;
+	int this_cpu = smp_processor_id();
 
-	if (!printk_time)
+	if (!printk_time || g_print_die || g_print_back_trace || g_print_bug_report || g_print_warn)
 		return 0;
 
 	rem_nsec = do_div(ts, 1000000000);
@@ -1225,8 +1256,34 @@ static size_t print_time(u64 ts, char *buf)
 	if (!buf)
 		return snprintf(NULL, 0, "[%5lu.000000] ", (unsigned long)ts);
 
-	return sprintf(buf, "[%5lu.%06lu] ",
+	if (boot_after_60sec == 0 && ts >= 60)
+		boot_after_60sec = 1;
+
+	if (boot_after_60sec && !nSuspendInProgress) {
+
+		getnstimeofday(&timespec);
+
+		timespec.tv_sec -= sys_tz.tz_minuteswest * 60;
+
+		myrtc_time_to_tm(timespec.tv_sec, &tm);
+
+		if (!buf)
+			return snprintf(NULL, 0, "[%5lu.000000] ", (unsigned long)ts);
+
+		return sprintf(buf, "[%5lu.%06lu][%02d:%02d:%02d.%09lu](%x)[%d:%s] ",
+			(unsigned long)ts,
+			rem_nsec / 1000,
+			tm.tm_hour, tm.tm_min, tm.tm_sec, timespec.tv_nsec,
+			this_cpu, current->pid, current->comm);
+	} else {
+		if (current) {
+			return sprintf(buf, "[%5lu.%06lu](%x)[%d:%s] ",
+				(unsigned long)ts, rem_nsec / 1000, this_cpu, current->pid, current->comm);
+		}
+
+		return sprintf(buf, "[%5lu.%06lu] ",
 		       (unsigned long)ts, rem_nsec / 1000);
+	}
 }
 
 static size_t print_prefix(const struct printk_log *msg, bool syslog, char *buf)
@@ -1248,7 +1305,7 @@ static size_t print_prefix(const struct printk_log *msg, bool syslog, char *buf)
 		}
 	}
 
-	len += print_time(msg->ts_nsec, buf ? buf + len : NULL);
+	//len += print_time(msg->ts_nsec, buf ? buf + len : NULL);
 	return len;
 }
 
@@ -1660,7 +1717,7 @@ static bool cont_add(int facility, int level, enum log_flags flags, const char *
 	return true;
 }
 
-static size_t log_output(int facility, int level, enum log_flags lflags, const char *dict, size_t dictlen, char *text, size_t text_len)
+static size_t log_output(int facility, int level, enum log_flags lflags, const char *dict, size_t dictlen, char *text, size_t text_len, u64 ts)
 {
 	/*
 	 * If an earlier line was buffered, and we're a continuation
@@ -1686,7 +1743,7 @@ static size_t log_output(int facility, int level, enum log_flags lflags, const c
 	}
 
 	/* Store it in the record log */
-	return log_store(facility, level, lflags, 0, dict, dictlen, text, text_len);
+	return log_store(facility, level, lflags, ts, dict, dictlen, text, text_len);
 }
 
 /* Must be called under logbuf_lock. */
@@ -1695,18 +1752,26 @@ int vprintk_store(int facility, int level,
 		  const char *fmt, va_list args)
 {
 	static char textbuf[LOG_LINE_MAX];
+	static char textbuf1[LOG_LINE_MAX];
 	char *text = textbuf;
+	char *text1 = textbuf1;
 	size_t text_len;
 	enum log_flags lflags = 0;
+	u64 ts = 0;
+	char time_buf[512];
+	size_t time_size = 0;
+
+	boot_delay_msec(level);
+	printk_delay();
 
 	/*
 	 * The printf needs to come first; we need the syslog
 	 * prefix which might be passed-in as a parameter.
 	 */
-	text_len = vscnprintf(text, sizeof(textbuf), fmt, args);
+	text_len = vscnprintf(text1, sizeof(textbuf1), fmt, args);
 
 	/* mark and strip a trailing newline */
-	if (text_len && text[text_len-1] == '\n') {
+	if (text_len && text1[text_len-1] == '\n') {
 		text_len--;
 		lflags |= LOG_NEWLINE;
 	}
@@ -1715,7 +1780,7 @@ int vprintk_store(int facility, int level,
 	if (facility == 0) {
 		int kern_level;
 
-		while ((kern_level = printk_get_level(text)) != 0) {
+		while ((kern_level = printk_get_level(text1)) != 0) {
 			switch (kern_level) {
 			case '0' ... '7':
 				if (level == LOGLEVEL_DEFAULT)
@@ -1729,13 +1794,21 @@ int vprintk_store(int facility, int level,
 			}
 
 			text_len -= 2;
-			text += 2;
+			text1 += 2;
 		}
 	}
 
 #ifdef CONFIG_EARLY_PRINTK_DIRECT
-	printascii(text);
+	printascii(text1);
 #endif
+
+	ts = local_clock();
+	time_size = print_time(ts, time_buf);
+	strncpy(text, time_buf, time_size);
+	strncpy(text+time_size, text1, (LOG_LINE_MAX-time_size));
+	text_len += time_size;
+	if(text_len > LOG_LINE_MAX)
+		text_len = LOG_LINE_MAX;
 
 	if (level == LOGLEVEL_DEFAULT)
 		level = default_message_loglevel;
@@ -1744,7 +1817,7 @@ int vprintk_store(int facility, int level,
 		lflags |= LOG_PREFIX|LOG_NEWLINE;
 
 	return log_output(facility, level, lflags,
-			  dict, dictlen, text, text_len);
+			  dict, dictlen, text, text_len, ts);
 }
 
 asmlinkage int vprintk_emit(int facility, int level,
@@ -2025,6 +2098,8 @@ MODULE_PARM_DESC(console_suspend, "suspend console during suspend"
  */
 void suspend_console(void)
 {
+	ASUSEvtlog("[UTS] System Suspend\n");
+	nSuspendInProgress = 1;
 	if (!console_suspend_enabled)
 		return;
 	printk("Suspending console(s) (use no_console_suspend to debug)\n");
@@ -2035,6 +2110,31 @@ void suspend_console(void)
 
 void resume_console(void)
 {
+	int i; //ASUS_BSP +
+	ASUSEvtlog("[UTS] System Resume\n");
+	nSuspendInProgress = 0;
+
+//ASUS_BSP +++ [PM]Show GIC_IRQ wakeup information in AsusEvtlog
+	if (pm_pwrcs_ret) {
+		if (gic_irq_cnt > 0) {
+			for (i = 0; i < gic_irq_cnt; i++) {
+				unsigned int irq = gic_resume_irq[i];
+				struct irq_desc *desc = irq_to_desc(irq);
+				const char *name = "null";
+
+				if (desc == NULL)
+					name = "stray irq";
+				else if (desc->action && desc->action->name)
+					name = desc->action->name;
+				log_wakeup_reason(irq);
+				ASUSEvtlog("[PM] IRQs triggered: %d %s\n", gic_resume_irq[i], name);
+			}
+			gic_irq_cnt = 0;  //clear log count
+		}
+		pm_pwrcs_ret = 0;
+	}
+//ASUS_BSP --- [PM]Show GIC_IRQ wakeup information in AsusEvtlog
+
 	if (!console_suspend_enabled)
 		return;
 	down_console_sem();

@@ -99,7 +99,7 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 		(!rd_done_th_assert)) {
 		cci_dev->cci_master_info[MASTER_0].status = 0;
 		rd_done_th_assert = true;
-		if (cci_dev->is_burst_read)
+		if (cci_dev->is_burst_read[MASTER_0])
 			complete(
 			&cci_dev->cci_master_info[MASTER_0].th_complete);
 		complete(&cci_dev->cci_master_info[MASTER_0].reset_complete);
@@ -155,7 +155,7 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 		(!rd_done_th_assert)) {
 		cci_dev->cci_master_info[MASTER_1].status = 0;
 		rd_done_th_assert = true;
-		if (cci_dev->is_burst_read)
+		if (cci_dev->is_burst_read[MASTER_1])
 			complete(
 			&cci_dev->cci_master_info[MASTER_1].th_complete);
 		complete(&cci_dev->cci_master_info[MASTER_1].reset_complete);
@@ -219,13 +219,13 @@ irqreturn_t cam_cci_irq(int irq_num, void *data)
 		cci_dev->cci_master_info[MASTER_0].status = -EINVAL;
 		cam_io_w_mb(CCI_M0_HALT_REQ_RMSK,
 			base + CCI_HALT_REQ_ADDR);
-		CAM_DBG(CAM_CCI, "MASTER_0 error 0x%x", irq_status0);
+		CAM_ERR(CAM_CCI, "MASTER_0 error 0x%x", irq_status0);
 	}
 	if (irq_status0 & CCI_IRQ_STATUS_0_I2C_M1_ERROR_BMSK) {
 		cci_dev->cci_master_info[MASTER_1].status = -EINVAL;
 		cam_io_w_mb(CCI_M1_HALT_REQ_RMSK,
 			base + CCI_HALT_REQ_ADDR);
-		CAM_DBG(CAM_CCI, "MASTER_1 error 0x%x", irq_status0);
+		CAM_ERR(CAM_CCI, "MASTER_1 error 0x%x", irq_status0);
 
 	}
 

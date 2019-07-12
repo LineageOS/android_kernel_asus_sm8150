@@ -16,6 +16,7 @@
 #include <linux/stat.h>
 #include <linux/fault-inject.h>
 #include <linux/uaccess.h>
+#include <linux/gpio.h>
 
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
@@ -456,6 +457,16 @@ static const struct file_operations mmc_err_stats_fops = {
 	.write	= mmc_err_stats_write,
 };
 
+static int sd_status_get(void *data, u64 *val)
+{
+	extern int sd_gpio;
+	if (gpio_is_valid(sd_gpio))
+		*val = gpio_get_value_cansleep(sd_gpio) ? 0 : 1;
+
+	return 0;
+}
+DEFINE_SIMPLE_ATTRIBUTE(mmc_sd_card_detect, sd_status_get, NULL, "%llu\n");
+
 void mmc_add_host_debugfs(struct mmc_host *host)
 {
 	struct dentry *root;
@@ -531,6 +542,11 @@ void mmc_add_host_debugfs(struct mmc_host *host)
 	if (!debugfs_create_file("force_error", 0200, root, host,
 		&mmc_force_err_fops))
 		goto err_node;
+	if (!strcmp(mmc_hostname(host), "mmc0")) {
+		if (!debugfs_create_file("sd_status", S_IRUGO, root, host,
+			&mmc_sd_card_detect))
+			goto err_node;
+	}
 
 	return;
 

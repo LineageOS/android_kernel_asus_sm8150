@@ -1,4 +1,4 @@
-/* Copyright (c) 2017-2019 The Linux Foundation. All rights reserved.
+/* Copyright (c) 2017-2018 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -12,11 +12,9 @@
 
 #define pr_fmt(fmt) "SMB1390: %s: " fmt, __func__
 
-#include <linux/debugfs.h>
 #include <linux/device.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
-#include <linux/qpnp/qpnp-revid.h>
 #include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/of_irq.h>
@@ -69,10 +67,6 @@
 #define CORE_FTRIM_ILIM_REG		0x1030
 #define CFG_ILIM_MASK			GENMASK(4, 0)
 
-#define CORE_FTRIM_CTRL_REG		0x1031
-#define TEMP_ALERT_LVL_MASK		GENMASK(6, 5)
-#define TEMP_ALERT_LVL_SHIFT		5
-
 #define CORE_FTRIM_LVL_REG		0x1033
 #define CFG_WIN_HI_MASK			GENMASK(3, 2)
 #define WIN_OV_LVL_1000MV		0x08
@@ -96,19 +90,6 @@
 #define WIRELESS_VOTER		"WIRELESS_VOTER"
 #define SRC_VOTER		"SRC_VOTER"
 #define SWITCHER_TOGGLE_VOTER	"SWITCHER_TOGGLE_VOTER"
-#define SOC_LEVEL_VOTER		"SOC_LEVEL_VOTER"
-
-#define THERMAL_SUSPEND_DECIDEGC	1400
-
-#define smb1390_dbg(chip, reason, fmt, ...)				\
-	do {								\
-		if (chip->debug_mask & (reason))			\
-			pr_info("SMB1390: %s: " fmt, __func__,		\
-				##__VA_ARGS__);				\
-		else							\
-			pr_debug("SMB1390: %s: " fmt, __func__,		\
-				##__VA_ARGS__);				\
-	} while (0)
 
 enum {
 	SWITCHER_OFF_WINDOW_IRQ = 0,
@@ -127,14 +108,6 @@ enum {
 	SMB_PIN_EN,
 };
 
-enum print_reason {
-	PR_INTERRUPT		= BIT(0),
-	PR_REGISTER		= BIT(1),
-	PR_INFO			= BIT(2),
-	PR_EXT_DEPENDENCY	= BIT(3),
-	PR_MISC			= BIT(4),
-};
-
 struct smb1390_iio {
 	struct iio_channel	*die_temp_chan;
 };
@@ -144,8 +117,6 @@ struct smb1390 {
 	struct regmap		*regmap;
 	struct notifier_block	nb;
 	struct wakeup_source	*cp_ws;
-	struct dentry		*dfs_root;
-	struct pmic_revid_data	*pmic_rev_id;
 
 	/* work structs */
 	struct work_struct	status_change_work;
@@ -176,11 +147,6 @@ struct smb1390 {
 	bool			switcher_enabled;
 	int			die_temp;
 	bool			suspended;
-	bool			disabled;
-	u32			debug_mask;
-	u32			min_ilim_ua;
-	u32			max_temp_alarm_degc;
-	u32			max_cutoff_soc;
 };
 
 struct smb_irq {
@@ -207,8 +173,7 @@ static int smb1390_masked_write(struct smb1390 *chip, int reg, int mask,
 {
 	int rc;
 
-	smb1390_dbg(chip, PR_REGISTER, "Writing 0x%02x to 0x%04x with mask 0x%02x\n",
-			val, reg, mask);
+	pr_debug("Writing 0x%02x to 0x%04x with mask 0x%02x\n", val, reg, mask);
 	rc = regmap_update_bits(chip->regmap, reg, mask, val);
 	if (rc < 0)
 		pr_err("Couldn't write 0x%02x to 0x%04x with mask 0x%02x\n",
@@ -222,7 +187,7 @@ static bool is_psy_voter_available(struct smb1390 *chip)
 	if (!chip->batt_psy) {
 		chip->batt_psy = power_supply_get_by_name("battery");
 		if (!chip->batt_psy) {
-			smb1390_dbg(chip, PR_EXT_DEPENDENCY, "Couldn't find battery psy\n");
+			pr_debug("Couldn't find battery psy\n");
 			return false;
 		}
 	}
@@ -230,7 +195,7 @@ static bool is_psy_voter_available(struct smb1390 *chip)
 	if (!chip->usb_psy) {
 		chip->usb_psy = power_supply_get_by_name("usb");
 		if (!chip->usb_psy) {
-			smb1390_dbg(chip, PR_EXT_DEPENDENCY, "Couldn't find usb psy\n");
+			pr_debug("Couldn't find usb psy\n");
 			return false;
 		}
 	}
@@ -238,7 +203,7 @@ static bool is_psy_voter_available(struct smb1390 *chip)
 	if (!chip->dc_psy) {
 		chip->dc_psy = power_supply_get_by_name("dc");
 		if (!chip->dc_psy) {
-			smb1390_dbg(chip, PR_EXT_DEPENDENCY, "Couldn't find dc psy\n");
+			pr_debug("Couldn't find dc psy\n");
 			return false;
 		}
 	}
@@ -246,7 +211,7 @@ static bool is_psy_voter_available(struct smb1390 *chip)
 	if (!chip->fcc_votable) {
 		chip->fcc_votable = find_votable("FCC");
 		if (!chip->fcc_votable) {
-			smb1390_dbg(chip, PR_EXT_DEPENDENCY, "Couldn't find FCC votable\n");
+			pr_debug("Couldn't find FCC votable\n");
 			return false;
 		}
 	}
@@ -254,13 +219,13 @@ static bool is_psy_voter_available(struct smb1390 *chip)
 	if (!chip->fv_votable) {
 		chip->fv_votable = find_votable("FV");
 		if (!chip->fv_votable) {
-			smb1390_dbg(chip, PR_EXT_DEPENDENCY, "Couldn't find FV votable\n");
+			pr_debug("Couldn't find FV votable\n");
 			return false;
 		}
 	}
 
 	if (!chip->disable_votable) {
-		smb1390_dbg(chip, PR_MISC, "Couldn't find CP DISABLE votable\n");
+		pr_debug("Couldn't find CP DISABLE votable\n");
 		return false;
 	}
 
@@ -296,8 +261,7 @@ static int smb1390_get_cp_en_status(struct smb1390 *chip, int id, bool *enable)
 		*enable = !!(status & EN_PIN_OUT2_BIT);
 		break;
 	default:
-		smb1390_dbg(chip, PR_MISC, "cp_en status %d is not supported",
-				id);
+		pr_debug("cp_en status %d is not supported", id);
 		rc = -EINVAL;
 		break;
 	}
@@ -313,8 +277,7 @@ static irqreturn_t default_irq_handler(int irq, void *data)
 
 	for (i = 0; i < NUM_IRQS; ++i) {
 		if (irq == chip->irqs[i]) {
-			smb1390_dbg(chip, PR_INTERRUPT, "%s IRQ triggered\n",
-				smb_irqs[i].name);
+			pr_debug("%s IRQ triggered\n", smb_irqs[i].name);
 			chip->irq_status |= 1 << i;
 		}
 	}
@@ -462,28 +425,6 @@ unlock:
 	return rc;
 }
 
-static int smb1390_is_batt_soc_valid(struct smb1390 *chip)
-{
-	int rc;
-	union power_supply_propval pval = {0, };
-
-	if (!chip->batt_psy)
-		goto out;
-
-	rc = power_supply_get_property(chip->batt_psy,
-			POWER_SUPPLY_PROP_CAPACITY, &pval);
-	if (rc < 0) {
-		pr_err("Couldn't get CAPACITY rc=%d\n", rc);
-		goto out;
-	}
-
-	if (pval.intval >= chip->max_cutoff_soc)
-		return false;
-
-out:
-	return true;
-}
-
 /* voter callbacks */
 static int smb1390_disable_vote_cb(struct votable *votable, void *data,
 				  int disable, const char *client)
@@ -507,10 +448,8 @@ static int smb1390_disable_vote_cb(struct votable *votable, void *data,
 	}
 
 	/* charging may have been disabled by ILIM; send uevent */
-	if (chip->cp_master_psy && (disable != chip->disabled))
+	if (chip->cp_master_psy)
 		power_supply_changed(chip->cp_master_psy);
-
-	chip->disabled = disable;
 	return rc;
 }
 
@@ -537,13 +476,12 @@ static int smb1390_ilim_vote_cb(struct votable *votable, void *data,
 		return rc;
 	}
 
-	/* ILIM less than min_ilim_ua, disable charging */
-	if (ilim_uA < chip->min_ilim_ua) {
-		smb1390_dbg(chip, PR_INFO, "ILIM %duA is too low to allow charging\n",
-			ilim_uA);
+	/* ILIM less than 1A is not accurate; disable charging */
+	if (ilim_uA < 1000000) {
+		pr_debug("ILIM %duA is too low to allow charging\n", ilim_uA);
 		vote(chip->disable_votable, ILIM_VOTER, true, 0);
 	} else {
-		smb1390_dbg(chip, PR_INFO, "ILIM set to %duA\n", ilim_uA);
+		pr_debug("ILIM set to %duA\n", ilim_uA);
 		vote(chip->disable_votable, ILIM_VOTER, false, 0);
 	}
 
@@ -584,9 +522,6 @@ static void smb1390_status_change_work(struct work_struct *work)
 
 	if (!is_psy_voter_available(chip))
 		goto out;
-
-	vote(chip->disable_votable, SOC_LEVEL_VOTER,
-			smb1390_is_batt_soc_valid(chip) ? false : true, 0);
 
 	rc = power_supply_get_property(chip->usb_psy,
 			POWER_SUPPLY_PROP_SMB_EN_MODE, &pval);
@@ -666,7 +601,6 @@ static void smb1390_status_change_work(struct work_struct *work)
 		vote(chip->disable_votable, SRC_VOTER, true, 0);
 		vote(chip->disable_votable, TAPER_END_VOTER, false, 0);
 		vote(chip->fcc_votable, CP_VOTER, false, 0);
-		vote(chip->disable_votable, SOC_LEVEL_VOTER, true, 0);
 	}
 
 out:
@@ -694,7 +628,7 @@ static void smb1390_taper_work(struct work_struct *work)
 
 		if (get_effective_result(chip->fv_votable) >
 						chip->taper_entry_fv) {
-			smb1390_dbg(chip, PR_INFO, "Float voltage increased. Exiting taper\n");
+			pr_debug("Float voltage increased. Exiting taper\n");
 			goto out;
 		} else {
 			chip->taper_entry_fv =
@@ -704,23 +638,22 @@ static void smb1390_taper_work(struct work_struct *work)
 		if (pval.intval == POWER_SUPPLY_CHARGE_TYPE_TAPER) {
 			fcc_uA = get_effective_result(chip->fcc_votable)
 								- 100000;
-			smb1390_dbg(chip, PR_INFO, "taper work reducing FCC to %duA\n",
-				fcc_uA);
+			pr_debug("taper work reducing FCC to %duA\n", fcc_uA);
 			vote(chip->fcc_votable, CP_VOTER, true, fcc_uA);
 
-			if (fcc_uA < (chip->min_ilim_ua * 2)) {
+			if (fcc_uA < 2000000) {
 				vote(chip->disable_votable, TAPER_END_VOTER,
 								true, 0);
 				goto out;
 			}
 		} else {
-			smb1390_dbg(chip, PR_INFO, "In fast charging. Wait for next taper\n");
+			pr_debug("In fast charging. Wait for next taper\n");
 		}
 
 		msleep(500);
 	}
 out:
-	smb1390_dbg(chip, PR_INFO, "taper work exit\n");
+	pr_debug("taper work exit\n");
 	vote(chip->fcc_votable, CP_VOTER, false, 0);
 	chip->taper_work_running = false;
 }
@@ -735,7 +668,6 @@ static enum power_supply_property smb1390_charge_pump_props[] = {
 	POWER_SUPPLY_PROP_CP_TOGGLE_SWITCHER,
 	POWER_SUPPLY_PROP_CP_IRQ_STATUS,
 	POWER_SUPPLY_PROP_CP_ILIM,
-	POWER_SUPPLY_PROP_CHIP_VERSION,
 };
 
 static int smb1390_get_prop(struct power_supply *psy,
@@ -780,24 +712,9 @@ static int smb1390_get_prop(struct power_supply *psy,
 			else
 				rc = -ENODATA;
 		} else {
-			/*
-			 * Add a filter to the die temp value read:
-			 * If temp > THERMAL_SUSPEND_DECIDEGC then
-			 *	- treat it as an error and report last valid
-			 *	  cached temperature.
-			 *	- return -ENODATA if the cached value is
-			 *	  invalid.
-			 */
-
 			rc = smb1390_get_die_temp(chip, val);
-			if (rc >= 0) {
-				if (val->intval <= THERMAL_SUSPEND_DECIDEGC)
-					chip->die_temp = val->intval;
-				else if (chip->die_temp == -ENODATA)
-					rc = -ENODATA;
-				else
-					val->intval = chip->die_temp;
-			}
+			if (rc >= 0)
+				chip->die_temp = val->intval;
 		}
 		break;
 	case POWER_SUPPLY_PROP_CP_ISNS:
@@ -822,11 +739,8 @@ static int smb1390_get_prop(struct power_supply *psy,
 			val->intval = ((status & CFG_ILIM_MASK) * 100000)
 					+ 500000;
 		break;
-	case POWER_SUPPLY_PROP_CHIP_VERSION:
-		val->intval = chip->pmic_rev_id->rev4;
-		break;
 	default:
-		smb1390_dbg(chip, PR_MISC, "charge pump power supply get prop %d not supported\n",
+		pr_debug("charge pump power supply get prop %d not supported\n",
 			prop);
 		return -EINVAL;
 	}
@@ -853,7 +767,7 @@ static int smb1390_set_prop(struct power_supply *psy,
 		chip->irq_status = val->intval;
 		break;
 	default:
-		smb1390_dbg(chip, PR_MISC, "charge pump power supply set prop %d not supported\n",
+		pr_debug("charge pump power supply set prop %d not supported\n",
 			prop);
 		return -EINVAL;
 	}
@@ -922,23 +836,9 @@ static int smb1390_parse_dt(struct smb1390 *chip)
 			chip->iio.die_temp_chan = NULL;
 			return rc;
 		}
-	} else {
-		return rc;
 	}
 
-	chip->min_ilim_ua = 1000000; /* 1A */
-	of_property_read_u32(chip->dev->of_node, "qcom,min-ilim-ua",
-			&chip->min_ilim_ua);
-
-	chip->max_temp_alarm_degc = 110;
-	of_property_read_u32(chip->dev->of_node, "qcom,max-temp-alarm-degc",
-			&chip->max_temp_alarm_degc);
-
-	chip->max_cutoff_soc = 85; /* 85% */
-	of_property_read_u32(chip->dev->of_node, "qcom,max-cutoff-soc",
-			&chip->max_cutoff_soc);
-
-	return 0;
+	return rc;
 }
 
 static void smb1390_release_channels(struct smb1390 *chip)
@@ -964,9 +864,6 @@ static int smb1390_create_votables(struct smb1390 *chip)
 	 * traditional parallel charging if present
 	 */
 	vote(chip->disable_votable, USER_VOTER, true, 0);
-	/* keep charge pump disabled if SOC is above threshold */
-	vote(chip->disable_votable, SOC_LEVEL_VOTER,
-			smb1390_is_batt_soc_valid(chip) ? false : true, 0);
 
 	/*
 	 * In case SMB1390 probe happens after FCC value has been configured,
@@ -987,7 +884,7 @@ static void smb1390_destroy_votables(struct smb1390 *chip)
 
 static int smb1390_init_hw(struct smb1390 *chip)
 {
-	int rc = 0, val;
+	int rc;
 
 	/*
 	 * Improve ILIM accuracy:
@@ -1004,25 +901,8 @@ static int smb1390_init_hw(struct smb1390 *chip)
 	if (rc < 0)
 		return rc;
 
-	switch (chip->max_temp_alarm_degc) {
-	case 125:
-		val = 0x00;
-		break;
-	case 95:
-		val = 0x02;
-		break;
-	case 85:
-		val = 0x03;
-		break;
-	case 110:
-	default:
-		val = 0x01;
-		break;
-	}
-	rc = smb1390_masked_write(chip, CORE_FTRIM_CTRL_REG,
-			TEMP_ALERT_LVL_MASK, val << TEMP_ALERT_LVL_SHIFT);
 
-	return rc;
+	return 0;
 }
 
 static int smb1390_get_irq_index_byname(const char *irq_name)
@@ -1096,54 +976,10 @@ static int smb1390_request_interrupts(struct smb1390 *chip)
 	return rc;
 }
 
-#ifdef CONFIG_DEBUG_FS
-static void smb1390_create_debugfs(struct smb1390 *chip)
-{
-	struct dentry *entry;
-
-	chip->dfs_root = debugfs_create_dir("smb1390_charger_psy", NULL);
-	if (IS_ERR_OR_NULL(chip->dfs_root)) {
-		pr_err("Failed to create debugfs directory, rc=%ld\n",
-					(long)chip->dfs_root);
-		return;
-	}
-
-	entry = debugfs_create_u32("debug_mask", 0600, chip->dfs_root,
-			&chip->debug_mask);
-	if (IS_ERR_OR_NULL(entry)) {
-		pr_err("Failed to create debug_mask, rc=%ld\n", (long)entry);
-		debugfs_remove_recursive(chip->dfs_root);
-	}
-}
-#else
-static void smb1390_create_debugfs(struct smb1390 *chip)
-{
-}
-#endif
-
 static int smb1390_probe(struct platform_device *pdev)
 {
 	struct smb1390 *chip;
-	struct device_node *revid_dev_node;
-	struct pmic_revid_data *pmic_rev_id;
 	int rc;
-
-	revid_dev_node = of_parse_phandle(pdev->dev.of_node,
-					  "qcom,pmic-revid", 0);
-	if (!revid_dev_node) {
-		pr_err("Missing qcom,pmic-revid property\n");
-		return -EINVAL;
-	}
-
-	pmic_rev_id = get_revid_data(revid_dev_node);
-	if (IS_ERR_OR_NULL(pmic_rev_id)) {
-		/*
-		 * the revid peripheral must be registered, any failure
-		 * here only indicates that the rev-id module has not
-		 * probed yet.
-		 */
-		return -EPROBE_DEFER;
-	}
 
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip)
@@ -1153,8 +989,6 @@ static int smb1390_probe(struct platform_device *pdev)
 	spin_lock_init(&chip->status_change_lock);
 	mutex_init(&chip->die_chan_lock);
 	chip->die_temp = -ENODATA;
-	chip->pmic_rev_id = pmic_rev_id;
-	chip->disabled = true;
 	platform_set_drvdata(pdev, chip);
 
 	chip->regmap = dev_get_regmap(chip->dev->parent, NULL);
@@ -1207,10 +1041,7 @@ static int smb1390_probe(struct platform_device *pdev)
 		goto out_notifier;
 	}
 
-	smb1390_create_debugfs(chip);
-
-	pr_info("smb1390 probed successfully chip_version=%d\n",
-			chip->pmic_rev_id->rev4);
+	pr_info("smb1390 probed successfully");
 	return 0;
 
 out_notifier:
@@ -1232,7 +1063,6 @@ static int smb1390_remove(struct platform_device *pdev)
 
 	/* explicitly disable charging */
 	vote(chip->disable_votable, USER_VOTER, true, 0);
-	vote(chip->disable_votable, SOC_LEVEL_VOTER, true, 0);
 	cancel_work(&chip->taper_work);
 	cancel_work(&chip->status_change_work);
 	wakeup_source_unregister(chip->cp_ws);

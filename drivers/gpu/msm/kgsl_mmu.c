@@ -471,6 +471,7 @@ int kgsl_mmu_svm_range(struct kgsl_pagetable *pagetable,
 		return pagetable->pt_ops->svm_range(pagetable, lo, hi,
 			memflags);
 
+	printk("[KGSL] kgsl_mmu_svm_range: retrun -ENODEV\n");
 	return -ENODEV;
 }
 EXPORT_SYMBOL(kgsl_mmu_svm_range);

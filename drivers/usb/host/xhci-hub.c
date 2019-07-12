@@ -626,32 +626,35 @@ static void xhci_port_set_test_mode(struct xhci_hcd *xhci,
 		xhci_start(xhci);
 }
 
-static int xhci_enter_test_mode(struct xhci_hcd *xhci,
+static int xhci_enter_test_mode(struct usb_hcd *hcd, struct xhci_hcd *xhci,
 				u16 test_mode, u16 wIndex, unsigned long *flags)
 {
-	int i, retval;
+	int retval, slot_id;
 
 	/* Disable all Device Slots */
 	xhci_dbg(xhci, "Disable all slots\n");
+	slot_id = xhci_find_slot_id_by_port(hcd, xhci,
+		wIndex + 1);
 	spin_unlock_irqrestore(&xhci->lock, *flags);
-	for (i = 1; i <= HCS_MAX_SLOTS(xhci->hcs_params1); i++) {
-		if (!xhci->devs[i])
-			continue;
+	//for (i = 1; i <= HCS_MAX_SLOTS(xhci->hcs_params1); i++) {
+		//if (!xhci->devs[i])
+			//continue;
 
-		retval = xhci_disable_slot(xhci, i);
-		if (retval)
-			xhci_err(xhci, "Failed to disable slot %d, %d. Enter test mode anyway\n",
-				 i, retval);
-	}
+		//retval = xhci_disable_slot(xhci, i);
+		//if (retval)
+			//xhci_err(xhci, "Failed to disable slot %d, %d. Enter test mode anyway\n",
+				 //i, retval);
+	//}
+	xhci_stop_device(xhci, slot_id, 1);
 	spin_lock_irqsave(&xhci->lock, *flags);
 	/* Put all ports to the Disable state by clear PP */
 	xhci_dbg(xhci, "Disable all port (PP = 0)\n");
 	/* Power off USB3 ports*/
-	for (i = 0; i < xhci->num_usb3_ports; i++)
-		xhci_set_port_power(xhci, xhci->shared_hcd, i, false, flags);
+	//for (i = 0; i < xhci->num_usb3_ports; i++)
+		//xhci_set_port_power(xhci, xhci->shared_hcd, i, false, flags);
 	/* Power off USB2 ports*/
-	for (i = 0; i < xhci->num_usb2_ports; i++)
-		xhci_set_port_power(xhci, xhci->main_hcd, i, false, flags);
+	//for (i = 0; i < xhci->num_usb2_ports; i++)
+		//xhci_set_port_power(xhci, xhci->main_hcd, i, false, flags);
 	/* Stop the controller */
 	xhci_dbg(xhci, "Stop controller\n");
 	retval = xhci_halt(xhci);
@@ -1478,7 +1481,7 @@ int xhci_hub_control(struct usb_hcd *hcd, u16 typeReq, u16 wValue,
 			}
 			if (test_mode > TEST_FORCE_EN || test_mode < TEST_J)
 				goto error;
-			retval = xhci_enter_test_mode(xhci, test_mode, wIndex,
+			retval = xhci_enter_test_mode(hcd, xhci, test_mode, wIndex,
 						      &flags);
 			break;
 		default:

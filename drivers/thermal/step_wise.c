@@ -186,6 +186,8 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 				trace_thermal_zone_trip(tz, trip, trip_type,
 							true);
 				update_passive_instance(tz, trip_type, 1);
+				dev_info(&tz->device, "Trigger1 step_wise_throttle! type:%s cur_temp:%d Trip%d[type=%d,temp=%d]:trend=%d,throttle=%d\n", 
+						tz->type, tz->temperature, trip, trip_type, trip_temp, trend, throttle);
 			}
 		} else {
 			/* Activate a passive thermal instance */
@@ -194,12 +196,16 @@ static void thermal_zone_trip_update(struct thermal_zone_device *tz, int trip)
 				trace_thermal_zone_trip(tz, trip, trip_type,
 							true);
 				update_passive_instance(tz, trip_type, 1);
+				dev_info(&tz->device, "Trigger2 step_wise_throttle! type:%s cur_temp:%d Trip%d[type=%d,temp=%d]:trend=%d,throttle=%d\n", 
+						tz->type, tz->temperature, trip, trip_type, trip_temp, trend, throttle);
 			/* Deactivate a passive thermal instance */
 			} else if (old_target != THERMAL_NO_TARGET &&
 				instance->target == THERMAL_NO_TARGET) {
 				trace_thermal_zone_trip(tz, trip, trip_type,
 							false);
 				update_passive_instance(tz, trip_type, -1);
+                                dev_info(&tz->device, "Recovery step_wise_throttle! type:%s cur_temp:%d Trip%d[type=%d,temp=%d]:trend=%d,throttle=%d\n",
+					 tz->type, tz->temperature, trip, trip_type, trip_temp, trend, throttle);
 			}
 		}
 

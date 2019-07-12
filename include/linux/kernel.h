@@ -15,6 +15,91 @@
 #include <linux/build_bug.h>
 #include <asm/byteorder.h>
 #include <uapi/linux/kernel.h>
+#include <linux/asusdebug.h>
+
+enum DEVICE_HWID
+{
+       HW_REV_INVALID = -1,
+       HW_REV_EVB   = 0,
+       HW_REV_EVB2  = 1,
+       HW_REV_EVB3  = 2,
+       HW_REV_SR   = 3,
+       HW_REV_SR2  = 4,
+       HW_REV_ER   = 5,
+       HW_REV_PR   = 6,
+       HW_REV_PR2  = 7,
+       HW_REV_MP   = 8
+};
+extern enum DEVICE_HWID g_ASUS_hwID;
+
+enum DEVICE_PROJID
+{
+       PROJECT_INVALID = -1,
+       PROJECT_KIRIN = 7
+};
+extern enum DEVICE_PROJID g_ASUS_prjID;
+
+enum DEVICE_SKUID
+{
+       SKU_ID_INVALID = -1,
+       SKU_ID_0  = 0,
+       SKU_ID_1  = 1,
+       SKU_ID_2  = 2,
+       SKU_ID_3  = 3,
+       SKU_ID_4  = 4,
+       SKU_ID_5  = 5,
+       SKU_ID_6  = 6,
+       SKU_ID_7  = 7
+};
+extern enum DEVICE_SKUID g_ASUS_skuID;
+
+enum DEVICE_RFSKU
+{
+        RF_SKU_UNKNOWN = -1,
+        NA_SKU = 5,
+        WW_SKU = 6,
+        TW_SKU = 7
+};
+extern enum DEVICE_RFSKU g_ASUS_rfSKU;
+
+enum DEVICE_LCMID
+{
+        LCM_VENDOR_INVALID = -1,
+        LCM_VENDOR1 = 0,
+        LCM_VENDOR2 = 1
+};
+extern enum DEVICE_LCMID g_ASUS_lcmID;
+
+enum DEVICE_FPID
+{
+        FP_VENDOR_INVALID = -1,
+        FP_VENDOR1 = 0,
+        FP_VENDOR2 = 1
+};
+extern enum DEVICE_FPID g_ASUS_fpID;
+
+enum DEVICE_NFCID
+{
+        NFC_VENDOR_INVALID = -1,
+        NFC_NOT_SUPPORT = 0,
+        NFC_SUPPORT = 1
+};
+extern enum DEVICE_NFCID g_ASUS_nfcID;
+
+enum DEVICE_DDRID
+{
+        DDR_VENDOR_INVALID = -1,
+        DDR_HYNIX = 0,
+        DDR_SAMSUNG = 1
+};
+extern enum DEVICE_DDRID g_ASUS_ddrID;
+
+// ASUS_BSP +++ get permissive status
+extern int permissive_enable;
+// ASUS_BSP --- get permissive status
+
+#define FORCE_RAMDUMP_FEATURE 1
+#define FORCE_WD_RESET_FEATURE 1
 
 #define USHRT_MAX	((u16)(~0U))
 #define SHRT_MAX	((s16)(USHRT_MAX>>1))

@@ -677,9 +677,9 @@ static void _print_entry(struct kgsl_device *device, struct _mem_entry *entry)
 		entry->pending_free ? "(pending free)" : "",
 		entry->pid, entry->name);
 }
-
+extern int delay_ctn;
 static void _check_if_freed(struct kgsl_iommu_context *ctx,
-	uint64_t addr, pid_t ptname)
+	uint64_t addr, pid_t ptname, char *Pname)
 {
 	uint64_t gpuaddr = addr;
 	uint64_t size = 0;
@@ -696,6 +696,10 @@ static void _check_if_freed(struct kgsl_iommu_context *ctx,
 		KGSL_LOG_DUMP(ctx->kgsldev,
 			"[%8.8llX-%8.8llX] (%s) was already freed by pid %d\n",
 			gpuaddr, gpuaddr + size, name, pid);
+
+		if(!strcmp("cation:workload", Pname)){
+		    delay_ctn = 1000;
+		}
 	}
 }
 
@@ -878,7 +882,7 @@ static int kgsl_iommu_fault_handler(struct iommu_domain *domain,
 
 		/* Don't print the debug if this is a permissions fault */
 		if (!(flags & IOMMU_FAULT_PERMISSION)) {
-			_check_if_freed(ctx, addr, ptname);
+			_check_if_freed(ctx, addr, ptname, context->proc_priv->comm);
 
 			KGSL_LOG_DUMP(ctx->kgsldev,
 				"---- nearby memory ----\n");

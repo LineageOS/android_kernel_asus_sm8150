@@ -1463,6 +1463,7 @@ static size_t a6xx_snapshot_gmu_mem(struct kgsl_device *device,
 	return desc->memdesc->size + sizeof(*header);
 }
 
+extern int delay_ctn;
 /*
  * a6xx_gmu_snapshot() - A6XX GMU snapshot function
  * @adreno_dev: Device being snapshotted
@@ -1500,6 +1501,7 @@ static void a6xx_gmu_snapshot(struct adreno_device *adreno_dev,
 	gx_on = a6xx_gmu_gx_is_on(adreno_dev);
 
 	if (gx_on) {
+		delay_ctn = 1000;
 		/* Set fence to ALLOW mode so registers can be read */
 		kgsl_regwrite(device, A6XX_GMU_AO_AHB_FENCE_CTRL, 0);
 		kgsl_regread(device, A6XX_GMU_AO_AHB_FENCE_CTRL, &val);

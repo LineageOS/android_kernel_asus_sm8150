@@ -44,6 +44,9 @@
 
 #include "irq-gic-common.h"
 
+//ASUS_BSP +++
+int gic_irq_cnt,gic_resume_irq[8];//[Power]Add these values to save IRQ's counts and number
+//ASUS_BSP ---
 struct redist_region {
 	void __iomem		*redist_base;
 	phys_addr_t		phys_base;
@@ -340,6 +343,19 @@ static int gic_suspend(void)
 	return 0;
 }
 
+/*AS-K Log Wake Up IP Address Info+*/
+#define IPA_IRQ_VALUE 107
+static int ipa_resume_irq_flag = 0;
+int ipa_resume_irq_flag_function(void) {
+    if( ipa_resume_irq_flag == 1 ) {
+        ipa_resume_irq_flag = 0;
+        return 1;
+    }
+    return 0;
+}
+EXPORT_SYMBOL(ipa_resume_irq_flag_function);
+/*AS-K Log Wake Up IP Address Info-*/
+
 static void gic_show_resume_irq(struct gic_chip_data *gic)
 {
 	unsigned int i;
@@ -347,6 +363,13 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	u32 pending[32];
 	void __iomem *base = gic_data.dist_base;
 
+//ASUS_BSP +++ [PM]reset IRQ count and IRQ number every time.
+	int j;
+	for (j = 0;j < 8; j++) {
+		gic_resume_irq[j]=0;
+	}
+	gic_irq_cnt=0;
+//ASUS_BSP --- [PM]reset IRQ count and IRQ number every time.
 	if (!msm_show_resume_irq_mask)
 		return;
 
@@ -369,7 +392,25 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 			name = desc->action->name;
 
 		pr_warn("%s: %d triggered %s\n", __func__, irq, name);
+
+		/*AS-K Log Wake Up IP Address Info+*/
+		if(irq == IPA_IRQ_VALUE) {
+			ipa_resume_irq_flag = 1;
+                }
+		/*AS-K Log Wake Up IP Address Info-*/
+
+//ASUS_BSP +++ [PM]save IRQ's counts and number
+		if (gic_irq_cnt < 8) {
+			gic_resume_irq[gic_irq_cnt] = irq;
+		}
+		gic_irq_cnt++;
+//ASUS_BSP --- [PM]save IRQ's counts and number
 	}
+//ASUS_BSP +++ [PM]Save maxmum count to 8
+	if (gic_irq_cnt >= 8) {
+		gic_irq_cnt = 7;
+	}
+//ASUS_BSP --- [PM]Save maxmum count to 8
 }
 
 static void gic_resume_one(struct gic_chip_data *gic)
@@ -552,7 +593,7 @@ static int __gic_populate_rdist(struct redist_region *region, void __iomem *ptr)
 		gic_data_rdist_rd_base() = ptr;
 		gic_data_rdist()->phys_base = region->phys_base + offset;
 
-		pr_info("CPU%d: found redistributor %lx region %d:%pa\n",
+		pr_debug("CPU%d: found redistributor %lx region %d:%pa\n",
 			smp_processor_id(), mpidr,
 			(int)(region - gic_data.redist_regions),
 			&gic_data_rdist()->phys_base);

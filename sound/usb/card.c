@@ -737,6 +737,7 @@ static int usb_audio_probe(struct usb_interface *intf,
 	usb_enable_autosuspend(chip->dev);
 	atomic_dec(&chip->active);
 	mutex_unlock(&register_mutex);
+	printk("[USB] usb sound card driver loaded !\n");
 	return 0;
 
  __error:

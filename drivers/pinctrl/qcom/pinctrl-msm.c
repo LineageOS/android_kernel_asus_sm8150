@@ -34,6 +34,7 @@
 #include <linux/pm.h>
 #include <linux/log2.h>
 #include <linux/irq.h>
+#include <linux/kernel.h>
 #include <soc/qcom/scm.h>
 #include "../core.h"
 #include "../pinconf.h"
@@ -80,7 +81,7 @@ struct msm_pinctrl {
 	phys_addr_t spi_cfg_regs;
 	phys_addr_t spi_cfg_end;
 };
-
+static struct gpio_chip* g_gpiochip;
 static struct msm_pinctrl *msm_pinctrl_data;
 static void __iomem *reassign_pctrl_reg(
 		const struct msm_pinctrl_soc_data *soc,
@@ -557,6 +558,74 @@ static void msm_gpio_set(struct gpio_chip *chip, unsigned offset, int value)
 #ifdef CONFIG_DEBUG_FS
 #include <linux/seq_file.h>
 
+static void suspend_msm_gpio_dbg_show_one(struct pinctrl_dev *pctldev,
+                                  struct gpio_chip *chip,
+                                  unsigned offset,
+                                  unsigned gpio)
+{
+        const struct msm_pingroup *g;
+        struct msm_pinctrl *pctrl = gpiochip_get_data(chip);
+        void __iomem *base;
+        unsigned func;
+        int is_out;
+        int drive;
+        int pull;
+        u32 ctl_reg;
+
+        static const char * const pulls[] = {
+                "no pull",
+                "pull down",
+                "keeper",
+                "pull up"
+        };
+
+        g = &pctrl->soc->groups[offset];
+        base = reassign_pctrl_reg(pctrl->soc, offset);
+        ctl_reg = readl(base + g->ctl_reg);
+
+        is_out = !!(ctl_reg & BIT(g->oe_bit));
+        func = (ctl_reg >> g->mux_bit) & 7;
+        drive = (ctl_reg >> g->drv_bit) & 7;
+        pull = (ctl_reg >> g->pull_bit) & 3;
+
+	 printk(" %-8s: %-3s %d %dmA %s", g->name, is_out ? "out" : "in", func, msm_regval_to_drive(drive), pulls[pull]);
+//         printk( " %dmA", msm_regval_to_drive(drive));
+  //       printk( " %s", pulls[pull]);
+
+/*        seq_printf(s, " %-8s: %-3s %d", g->name, is_out ? "out" : "in", func);
+        seq_printf(s, " %dmA", msm_regval_to_drive(drive));
+        seq_printf(s, " %s", pulls[pull]);
+*/
+}
+
+void suspend_msm_gpio_dbg_show(void)
+{
+	struct gpio_chip * chip = g_gpiochip;
+        unsigned gpio = chip->base;
+        unsigned i;
+
+        /*
+         *  Bypass AC_TZ config gpios to avoid abnormal status (NFC & FP)
+         *  {  0,  1,  2,  3 }, { 126,127,128,129 }, {  6,  7,  4,  5 }
+         */
+        for (i = 0; i < chip->ngpio; i++, gpio++) {
+                if (g_ASUS_hwID == HW_REV_EVB3) {
+                        // {  0,  1,  2,  3 }, {  6,  7,  4,  5 }
+                        if (i > 7) {
+                                suspend_msm_gpio_dbg_show_one(NULL, chip, i, gpio);
+                                printk("\n");
+                        }
+                } else {
+                        // {  0,  1,  2,  3 }, { 126,127,128,129 }
+                        if (((i > 3) && (i < 126)) || (i > 129)) {
+                                suspend_msm_gpio_dbg_show_one(NULL, chip, i, gpio);
+                                printk("\n");
+                        }
+                }
+        }
+}
+
+
 static void msm_gpio_dbg_show_one(struct seq_file *s,
 				  struct pinctrl_dev *pctldev,
 				  struct gpio_chip *chip,
@@ -593,14 +662,30 @@ static void msm_gpio_dbg_show_one(struct seq_file *s,
 	seq_printf(s, " %s", pulls[pull]);
 }
 
+extern enum DEVICE_HWID g_ASUS_hwID;
 static void msm_gpio_dbg_show(struct seq_file *s, struct gpio_chip *chip)
 {
 	unsigned gpio = chip->base;
 	unsigned i;
 
+	/*
+	 *  Bypass AC_TZ config gpios to avoid abnormal status (NFC & FP)
+	 *  {  0,  1,  2,  3 }, { 126,127,128,129 }, {  6,  7,  4,  5 }
+	 */
 	for (i = 0; i < chip->ngpio; i++, gpio++) {
-		msm_gpio_dbg_show_one(s, NULL, chip, i, gpio);
-		seq_puts(s, "\n");
+		if (g_ASUS_hwID == HW_REV_EVB3) {
+			// {  0,  1,  2,  3 }, {  6,  7,  4,  5 }
+			if (i > 7) {
+				msm_gpio_dbg_show_one(s, NULL, chip, i, gpio);
+				seq_puts(s, "\n");
+			}
+		} else {
+			// {  0,  1,  2,  3 }, { 126,127,128,129 }
+                        if (((i > 3) && (i < 126)) || (i > 129)) {
+                                msm_gpio_dbg_show_one(s, NULL, chip, i, gpio);
+                                seq_puts(s, "\n");
+                        }
+		}
 	}
 }
 
@@ -1770,7 +1855,6 @@ static void msm_pinctrl_setup_pm_reset(struct msm_pinctrl *pctrl)
 			break;
 		}
 }
-
 int msm_pinctrl_probe(struct platform_device *pdev,
 		      const struct msm_pinctrl_soc_data *soc_data)
 {
@@ -1847,7 +1931,7 @@ int msm_pinctrl_probe(struct platform_device *pdev,
 	platform_set_drvdata(pdev, pctrl);
 
 	dev_dbg(&pdev->dev, "Probed Qualcomm pinctrl driver\n");
-
+	g_gpiochip = &pctrl->chip;
 	return 0;
 }
 EXPORT_SYMBOL(msm_pinctrl_probe);

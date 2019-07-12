@@ -891,6 +891,7 @@ static inline int wants_signal(int sig, struct task_struct *p)
 	return task_curr(p) || !signal_pending(p);
 }
 
+extern int g_coredump_property; // ASUS BSP
 static void complete_signal(int sig, struct task_struct *p, int group)
 {
 	struct signal_struct *signal = p->signal;
@@ -939,23 +940,41 @@ static void complete_signal(int sig, struct task_struct *p, int group)
 		/*
 		 * This signal will be fatal to the whole group.
 		 */
-		if (!sig_kernel_coredump(sig)) {
-			/*
-			 * Start a group exit and wake everybody up.
-			 * This way we don't have other threads
-			 * running and doing things after a slower
-			 * thread has the fatal signal pending.
-			 */
-			signal->flags = SIGNAL_GROUP_EXIT;
-			signal->group_exit_code = sig;
-			signal->group_stop_count = 0;
-			t = p;
-			do {
-				task_clear_jobctl_pending(t, JOBCTL_PENDING_MASK);
-				sigaddset(&t->pending.signal, SIGKILL);
-				signal_wake_up(t, 1);
-			} while_each_thread(p, t);
-			return;
+
+		// ASUS BSP
+		if (g_coredump_property==1) {
+			if (!sig_kernel_coredump_asus(sig)) {
+				signal->flags = SIGNAL_GROUP_EXIT;
+				signal->group_exit_code = sig;
+				signal->group_stop_count = 0;
+				t = p;
+				do {
+					task_clear_jobctl_pending(t, JOBCTL_PENDING_MASK);
+					sigaddset(&t->pending.signal, SIGKILL);
+					signal_wake_up(t, 1);
+				} while_each_thread(p, t);
+				return;
+			}
+		}
+		else {
+			if (!sig_kernel_coredump(sig)) {
+				/*
+				 * Start a group exit and wake everybody up.
+				 * This way we don't have other threads
+				 * running and doing things after a slower
+				 * thread has the fatal signal pending.
+				 */
+				signal->flags = SIGNAL_GROUP_EXIT;
+				signal->group_exit_code = sig;
+				signal->group_stop_count = 0;
+				t = p;
+				do {
+					task_clear_jobctl_pending(t, JOBCTL_PENDING_MASK);
+					sigaddset(&t->pending.signal, SIGKILL);
+					signal_wake_up(t, 1);
+				} while_each_thread(p, t);
+				return;
+			}
 		}
 	}
 
@@ -2332,19 +2351,31 @@ relock:
 		 */
 		current->flags |= PF_SIGNALED;
 
-		if (sig_kernel_coredump(signr)) {
-			if (print_fatal_signals)
-				print_fatal_signal(ksig->info.si_signo);
-			proc_coredump_connector(current);
-			/*
-			 * If it was able to dump core, this kills all
-			 * other threads in the group and synchronizes with
-			 * their demise.  If we lost the race with another
-			 * thread getting here, it set group_exit_code
-			 * first and our do_group_exit call below will use
-			 * that value and ignore the one we pass it.
-			 */
-			do_coredump(&ksig->info);
+		// ASUS BSP
+		if (g_coredump_property==1) {
+			if (sig_kernel_coredump_asus(signr)) {
+				if (print_fatal_signals)
+					print_fatal_signal(ksig->info.si_signo);
+				proc_coredump_connector(current);
+
+				do_coredump(&ksig->info);
+			}
+		}
+		else {
+			if (sig_kernel_coredump(signr)) {
+				if (print_fatal_signals)
+					print_fatal_signal(ksig->info.si_signo);
+				proc_coredump_connector(current);
+				/*
+				 * If it was able to dump core, this kills all
+				 * other threads in the group and synchronizes with
+				 * their demise.  If we lost the race with another
+				 * thread getting here, it set group_exit_code
+				 * first and our do_group_exit call below will use
+				 * that value and ignore the one we pass it.
+				 */
+				do_coredump(&ksig->info);
+			}
 		}
 
 		/*

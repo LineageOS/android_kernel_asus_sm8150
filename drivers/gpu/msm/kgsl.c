@@ -32,6 +32,7 @@
 #include <linux/ctype.h>
 #include <linux/mm.h>
 #include <linux/ion.h>
+#include <linux/delay.h>
 #include <asm/cacheflush.h>
 #include <uapi/linux/sched/types.h>
 
@@ -1925,11 +1926,20 @@ long kgsl_ioctl_drawctxt_destroy(struct kgsl_device_private *dev_priv,
 
 	return 0;
 }
+int delay_ctn = 0;
 
 long gpumem_free_entry(struct kgsl_mem_entry *entry)
 {
 	if (!kgsl_mem_entry_set_pend(entry))
 		return -EBUSY;
+
+    if(delay_ctn > 0)
+    {
+        do{
+	        delay_ctn--;
+	        udelay(5*1000);
+        }while(delay_ctn > 0);
+    }
 
 	trace_kgsl_mem_free(entry);
 	kgsl_memfree_add(entry->priv->pid,
@@ -4379,12 +4389,21 @@ static unsigned long _cpu_get_unmapped_area(unsigned long bottom,
 	info.align_offset = 0;
 	info.align_mask = align - 1;
 
-	addr = vm_unmapped_area(&info);
+	addr = vm_unmapped_area(&info); // search unmapped area within low_limit~high_limit in mm->mm_rb
 
-	if (IS_ERR_VALUE(addr))
+	if (IS_ERR_VALUE(addr)) {
+		printk("[KGSL] _cpu_get_unmapped_area: |vm_unmapped_area| addr %ld bottom %ld top %ld len %ld align_offset %ld\n",
+			addr, bottom, top, len, info.align_offset);
 		return addr;
+	}
 
 	err = security_mmap_addr(addr);
+
+	if(err){
+		printk("[KGSL] _cpu_get_unmapped_area: |security_mmap_addr| err addr %ld bottom %ld top %ld len %ld align_offset %ld\n",
+			addr, bottom, top, len, info.align_offset);
+	}
+
 	return err ? err : addr;
 }
 
@@ -4400,6 +4419,8 @@ static unsigned long _search_range(struct kgsl_process_private *private,
 		cpu = _cpu_get_unmapped_area(start, gpu, len,
 			(unsigned long) align);
 		if (IS_ERR_VALUE(cpu)) {
+			printk("[KGSL] _search_range: |_cpu_get_unmapped_area| start %ld gpu %ld len %ld align %ld\n",
+				start, gpu, len, (unsigned long)align);
 			result = cpu;
 			break;
 		}
@@ -4411,6 +4432,7 @@ static unsigned long _search_range(struct kgsl_process_private *private,
 		trace_kgsl_mem_unmapped_area_collision(entry, cpu, len);
 
 		if (cpu <= start) {
+			printk("[KGSL] _search_range: cpu <= start\n");
 			result = -ENOMEM;
 			break;
 		}
@@ -4418,6 +4440,7 @@ static unsigned long _search_range(struct kgsl_process_private *private,
 		/* move downward to the next empty spot on the GPU */
 		gpu = _gpu_find_svm(private, start, cpu, len, align);
 		if (IS_ERR_VALUE(gpu)) {
+			printk("[KGSL] _search_range: |_gpu_find_svm| error \n");
 			result = gpu;
 			break;
 		}
@@ -4430,6 +4453,7 @@ static unsigned long _search_range(struct kgsl_process_private *private,
 
 		/* Break if the recommended GPU address is out of range */
 		if (gpu < start) {
+			printk("[KGSL] _search_range: gpu < start\n");
 			result = -ENOMEM;
 			break;
 		}
@@ -4466,14 +4490,18 @@ static unsigned long _get_svm_area(struct kgsl_process_private *private,
 
 	/* get the GPU pagetable's SVM range */
 	if (kgsl_mmu_svm_range(private->pagetable, &start, &end,
-				entry->memdesc.flags))
+				entry->memdesc.flags)) {
+		printk("[KGSL] _get_svm_area: |kgsl_mmu_svm_range| error = -ERANGE\n");
 		return -ERANGE;
+	}
 
 	/* now clamp the range based on the CPU's requirements */
 	start = max_t(uint64_t, start, mmap_min_addr);
 	end = min_t(uint64_t, end, current->mm->mmap_base);
-	if (start >= end)
+	if (start >= end) {
+		printk("[KGSL] _get_svm_area: start >= end\n");
 		return -ERANGE;
+	}
 
 	if (flags & MAP_FIXED) {
 		/* We must honor alignment requirements */
@@ -4498,8 +4526,10 @@ static unsigned long _get_svm_area(struct kgsl_process_private *private,
 			result = _gpu_set_svm_region(private, entry, addr, len);
 
 			/* On failure drop down to keep searching */
-			if (!IS_ERR_VALUE(result))
+			if (!IS_ERR_VALUE(result)) {
+				printk("[KGSL] _get_svm_area return: |_gpu_set_svm_region| error \n");
 				return result;
+			}
 		}
 	} else {
 		/* no hint, start search at the top and work down */
@@ -4511,10 +4541,170 @@ static unsigned long _get_svm_area(struct kgsl_process_private *private,
 	 * must try to search above it.
 	 */
 	result = _search_range(private, entry, start, addr, len, align);
-	if (IS_ERR_VALUE(result) && hint != 0)
+	if (IS_ERR_VALUE(result) && hint != 0) {
+		printk("[KGSL] _get_svm_area return: |_search_range| Error\n");
 		result = _search_range(private, entry, addr, end, len, align);
+	}
 
 	return result;
+}
+
+struct kgsl_process_mem_statistics kgsl_mem_count(struct kgsl_process_private *private)
+{
+	struct kgsl_mem_entry *temp_entry = NULL;
+	struct kgsl_memdesc *m = NULL;
+	char usage[16];
+	struct kgsl_process_mem_statistics kgsl_mem_statistics = {0};
+	kgsl_mem_statistics.pid = private->pid;
+	kgsl_mem_statistics.id_index = 1;
+
+	spin_lock(&private->mem_lock);
+	for (temp_entry = idr_get_next(&private->mem_idr, &kgsl_mem_statistics.id_index); temp_entry;
+		kgsl_mem_statistics.id_index++, temp_entry = idr_get_next(&private->mem_idr, &kgsl_mem_statistics.id_index)) {
+		if(temp_entry != NULL){
+			m = &temp_entry->memdesc;
+
+			if (m->flags & KGSL_MEMFLAGS_SPARSE_VIRT)
+				continue;
+
+			kgsl_get_memory_usage(usage, sizeof(usage), m->flags);
+
+			if(!strcmp(usage,"any(0)")){
+				kgsl_mem_statistics.any0_cnt++;
+				kgsl_mem_statistics.any0_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"framebuffer")){
+				kgsl_mem_statistics.framebuffer_cnt++;
+				kgsl_mem_statistics.framebuffer_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"renderbuffer")){
+				kgsl_mem_statistics.renderbuffer_cnt++;
+				kgsl_mem_statistics.renderbuffer_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"arraybuffer")){
+				kgsl_mem_statistics.arraybuffer_cnt++;
+				kgsl_mem_statistics.arraybuffer_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"elementarraybuffer")){
+				kgsl_mem_statistics.elementarraybuffer_cnt++;
+				kgsl_mem_statistics.elementarraybuffer_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"vertexarraybuffer")){
+				kgsl_mem_statistics.vertexarraybuffer_cnt++;
+				kgsl_mem_statistics.vertexarraybuffer_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"texture")){
+				kgsl_mem_statistics.texture_cnt++;
+				kgsl_mem_statistics.texture_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"surface")){
+				kgsl_mem_statistics.surface_cnt++;
+				kgsl_mem_statistics.surface_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"egl_surface")){
+				kgsl_mem_statistics.egl_surface_cnt++;
+				kgsl_mem_statistics.egl_surface_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"gl")){
+				kgsl_mem_statistics.gl_cnt++;
+				kgsl_mem_statistics.gl_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"cl")){
+				kgsl_mem_statistics.cl_cnt++;
+				kgsl_mem_statistics.cl_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"cl_buffer_map")){
+				kgsl_mem_statistics.cl_buffer_map_cnt++;
+				kgsl_mem_statistics.cl_buffer_map_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"cl_buffer_nomap")){
+				kgsl_mem_statistics.cl_buffer_nomap_cnt++;
+				kgsl_mem_statistics.cl_buffer_nomap_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"cl_image_map")){
+				kgsl_mem_statistics.cl_image_map_cnt++;
+				kgsl_mem_statistics.cl_image_map_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"cl_image_nomap")){
+				kgsl_mem_statistics.cl_image_nomap_cnt++;
+				kgsl_mem_statistics.cl_image_nomap_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"cl_kernel_stack")){
+				kgsl_mem_statistics.cl_kernel_stack_cnt++;
+				kgsl_mem_statistics.cl_kernel_stack_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"command")){
+				kgsl_mem_statistics.command_cnt++;
+				kgsl_mem_statistics.command_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"2d")){
+				kgsl_mem_statistics.twod_cnt++;
+				kgsl_mem_statistics.twod_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"egl_image")){
+				kgsl_mem_statistics.egl_image_cnt++;
+				kgsl_mem_statistics.egl_image_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"egl_shadow")){
+				kgsl_mem_statistics.egl_shadow_cnt++;
+				kgsl_mem_statistics.egl_shadow_totalsize+=(unsigned long)m->size;
+			}
+			else if(!strcmp(usage,"egl_multisample")){
+				kgsl_mem_statistics.egl_multisample_cnt++;
+				kgsl_mem_statistics.egl_multisample_totalsize+=(unsigned long)m->size;
+			}
+		}
+	}
+	spin_unlock(&private->mem_lock);
+
+	return kgsl_mem_statistics;
+}
+
+void kgsl_mem_statistics_print(struct kgsl_process_mem_statistics kgsl_mem_statistics)
+{
+	printk("[KGSL] ---- pid %u total mem id %u\n", kgsl_mem_statistics.pid, --kgsl_mem_statistics.id_index);
+	printk("[KGSL] any(0) count %u size %lu\n",
+		kgsl_mem_statistics.any0_cnt, kgsl_mem_statistics.any0_totalsize);
+	printk("[KGSL] framebuffer count %u size %lu\n",
+		kgsl_mem_statistics.framebuffer_cnt, kgsl_mem_statistics.framebuffer_totalsize);
+	printk("[KGSL] renderbuffer count %u size %lu\n",
+		kgsl_mem_statistics.renderbuffer_cnt, kgsl_mem_statistics.renderbuffer_totalsize);
+	printk("[KGSL] arraybuffer count %u size %lu\n",
+		kgsl_mem_statistics.arraybuffer_cnt, kgsl_mem_statistics.arraybuffer_totalsize);
+	printk("[KGSL] elementarraybuffer count %u size %lu\n",
+		kgsl_mem_statistics.elementarraybuffer_cnt, kgsl_mem_statistics.elementarraybuffer_totalsize);
+	printk("[KGSL] vertexarraybuffer count %u size %lu\n",
+		kgsl_mem_statistics.vertexarraybuffer_cnt, kgsl_mem_statistics.vertexarraybuffer_totalsize);
+	printk("[KGSL] texture count %u size %lu\n",
+		kgsl_mem_statistics.texture_cnt, kgsl_mem_statistics.texture_totalsize);
+	printk("[KGSL] surface count %u size %lu\n",
+		kgsl_mem_statistics.surface_cnt, kgsl_mem_statistics.surface_totalsize);
+	printk("[KGSL] egl_surface count %u size %lu\n",
+		kgsl_mem_statistics.egl_surface_cnt, kgsl_mem_statistics.egl_surface_totalsize);
+	printk("[KGSL] gl count %u size %lu\n",
+		kgsl_mem_statistics.gl_cnt, kgsl_mem_statistics.gl_totalsize);
+	printk("[KGSL] cl count %u size %lu\n",
+		kgsl_mem_statistics.cl_cnt, kgsl_mem_statistics.cl_totalsize);
+	printk("[KGSL] cl_buffer_map count %u size %lu\n",
+		kgsl_mem_statistics.cl_buffer_map_cnt, kgsl_mem_statistics.cl_buffer_map_totalsize);
+	printk("[KGSL] cl_buffer_nomap count %u size %lu\n",
+		kgsl_mem_statistics.cl_buffer_nomap_cnt, kgsl_mem_statistics.cl_buffer_nomap_totalsize);
+	printk("[KGSL] cl_image_map count %u size %lu\n",
+		kgsl_mem_statistics.cl_image_map_cnt, kgsl_mem_statistics.cl_image_map_totalsize);
+	printk("[KGSL] cl_image_nomap count %u size %lu\n",
+		kgsl_mem_statistics.cl_image_nomap_cnt, kgsl_mem_statistics.cl_image_nomap_totalsize);
+	printk("[KGSL] cl_kernel_stack count %u size %lu\n",
+		kgsl_mem_statistics.cl_kernel_stack_cnt, kgsl_mem_statistics.cl_kernel_stack_totalsize);
+	printk("[KGSL] command count %u size %lu\n",
+		kgsl_mem_statistics.command_cnt, kgsl_mem_statistics.command_totalsize);
+	printk("[KGSL] 2d count %u size %lu\n",
+		kgsl_mem_statistics.twod_cnt, kgsl_mem_statistics.twod_totalsize);
+	printk("[KGSL] egl_image count %u size %lu\n",
+		kgsl_mem_statistics.egl_image_cnt, kgsl_mem_statistics.egl_image_totalsize);
+	printk("[KGSL] egl_shadow count %u size %lu\n",
+		kgsl_mem_statistics.egl_shadow_cnt, kgsl_mem_statistics.egl_shadow_totalsize);
+	printk("[KGSL] egl_multisample count %u size %lu\n",
+		kgsl_mem_statistics.egl_multisample_cnt, kgsl_mem_statistics.egl_multisample_totalsize);
 }
 
 static unsigned long
@@ -4528,6 +4718,8 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_device *device = dev_priv->device;
 	struct kgsl_mem_entry *entry = NULL;
+
+	struct kgsl_process_mem_statistics kgsl_mem_statistics;
 
 	if (vma_offset == (unsigned long) device->memstore.gpuaddr)
 		return get_unmapped_area(NULL, addr, len, pgoff, flags);
@@ -4550,11 +4742,14 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 				private->pid, addr, pgoff, len, (int) val);
 	} else {
 		val = _get_svm_area(private, entry, addr, len, flags);
-		if (IS_ERR_VALUE(val))
+		if (IS_ERR_VALUE(val)) {
 			KGSL_DRV_ERR_RATELIMIT(device,
 				"_get_svm_area: pid %d mmap_base %lx addr %lx pgoff %lx len %ld failed error %d\n",
 				private->pid, current->mm->mmap_base, addr,
 				pgoff, len, (int) val);
+			kgsl_mem_statistics = kgsl_mem_count(private);
+			kgsl_mem_statistics_print(kgsl_mem_statistics);
+		}
 	}
 
 put:

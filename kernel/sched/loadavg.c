@@ -11,6 +11,8 @@
 #include <linux/sched/loadavg.h>
 
 #include "sched.h"
+#define LOAD_INT(x) ((x) >> FSHIFT)
+#define LOAD_FRAC(x) LOAD_INT(((x) & (FIXED_1-1)) * 100)
 
 /*
  * Global load-average calculations
@@ -329,6 +331,9 @@ static void calc_global_nohz(void)
 
 		WRITE_ONCE(calc_load_update, sample_window + n * LOAD_FREQ);
 	}
+
+	if (calc_load_idx & 1)
+		printk("loadavg %lu.%02lu  %ld/%d \n", LOAD_INT(avenrun[0]), LOAD_FRAC(avenrun[0]), nr_running(), nr_threads);
 
 	/*
 	 * Flip the NO_HZ index...

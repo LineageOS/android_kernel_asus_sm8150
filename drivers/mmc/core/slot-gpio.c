@@ -21,6 +21,8 @@
 
 #include "slot-gpio.h"
 
+int sd_gpio;
+
 struct mmc_gpio {
 	struct gpio_desc *ro_gpio;
 	struct gpio_desc *cd_gpio;
@@ -37,6 +39,8 @@ static irqreturn_t mmc_gpio_cd_irqt(int irq, void *dev_id)
 	struct mmc_host *host = dev_id;
 
 	host->trigger_card_event = true;
+	pr_info("%s: carddetect_irq gpio_%d:%d\n", mmc_hostname(host),
+		sd_gpio, gpio_get_value(sd_gpio));
 	mmc_detect_change(host, msecs_to_jiffies(200));
 
 	return IRQ_HANDLED;
@@ -155,6 +159,12 @@ void mmc_gpiod_request_cd_irq(struct mmc_host *host)
 			ctx->cd_label, host);
 		if (ret < 0)
 			irq = ret;
+		else {
+			ret = enable_irq_wake(irq);
+			if (ret)
+				pr_err("%s: SD card wake-up event registration"
+					" failed with error: %d\n",mmc_hostname(host), ret);
+		}
 	}
 
 	host->slot.cd_irq = irq;
@@ -265,6 +275,7 @@ int mmc_gpio_request_cd(struct mmc_host *host, unsigned int gpio,
 
 	ctx->override_cd_active_level = true;
 	ctx->cd_gpio = gpio_to_desc(gpio);
+	sd_gpio = gpio;
 
 	return 0;
 }

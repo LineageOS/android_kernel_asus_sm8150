@@ -405,7 +405,6 @@ bool drm_crtc_helper_set_mode(struct drm_crtc *crtc,
 		encoder_funcs = encoder->helper_private;
 		if (!encoder_funcs)
 			continue;
-
 		drm_bridge_pre_enable(encoder->bridge);
 
 		if (encoder_funcs->commit)
@@ -818,6 +817,7 @@ static void drm_helper_encoder_dpms(struct drm_encoder *encoder, int mode)
 
 	if (mode == DRM_MODE_DPMS_ON)
 		drm_bridge_pre_enable(bridge);
+
 	else
 		drm_bridge_disable(bridge);
 

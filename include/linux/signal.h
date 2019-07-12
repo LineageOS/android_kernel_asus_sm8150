@@ -391,6 +391,10 @@ int unhandled_signal(struct task_struct *tsk, int sig);
         rt_sigmask(SIGXCPU)   |  rt_sigmask(SIGXFSZ)   | \
 	SIGEMT_MASK				       )
 
+#define SIG_KERNEL_COREDUMP_ASUS_MASK (\
+        rt_sigmask(SIGSEGV)   | \
+	SIGEMT_MASK				       )
+
 #define SIG_KERNEL_IGNORE_MASK (\
         rt_sigmask(SIGCONT)   |  rt_sigmask(SIGCHLD)   | \
 	rt_sigmask(SIGWINCH)  |  rt_sigmask(SIGURG)    )
@@ -404,6 +408,7 @@ int unhandled_signal(struct task_struct *tsk, int sig);
 
 #define sig_kernel_only(sig)		siginmask(sig, SIG_KERNEL_ONLY_MASK)
 #define sig_kernel_coredump(sig)	siginmask(sig, SIG_KERNEL_COREDUMP_MASK)
+#define sig_kernel_coredump_asus(sig)	siginmask(sig, SIG_KERNEL_COREDUMP_ASUS_MASK)
 #define sig_kernel_ignore(sig)		siginmask(sig, SIG_KERNEL_IGNORE_MASK)
 #define sig_kernel_stop(sig)		siginmask(sig, SIG_KERNEL_STOP_MASK)
 #define sig_specific_sicodes(sig)	siginmask(sig, SIG_SPECIFIC_SICODES_MASK)

@@ -1901,24 +1901,34 @@ unsigned long unmapped_area(struct vm_unmapped_area_info *info)
 
 	/* Adjust search length to account for worst case alignment overhead */
 	length = info->length + info->align_mask;
-	if (length < info->length)
+	if (length < info->length) {
+		printk("[KGSL] unmapped_area_topdown length %lu < info->length %lu\n", length, info->length);
 		return -ENOMEM;
+	}
 
 	/* Adjust search limits by the desired length */
-	if (info->high_limit < length)
+	if (info->high_limit < length) {
+		printk("[KGSL] unmapped_area_topdown gap_end %lu < length %lu\n", gap_end, length);
 		return -ENOMEM;
+	}
 	high_limit = info->high_limit - length;
 
-	if (info->low_limit > high_limit)
+	if (info->low_limit > high_limit) {
+		printk("[KGSL] unmapped_area_topdown info->low_limit %lu > high_limit %lu\n", info->low_limit, high_limit);
 		return -ENOMEM;
+	}
 	low_limit = info->low_limit + length;
 
 	/* Check if rbtree root looks promising */
-	if (RB_EMPTY_ROOT(&mm->mm_rb))
+	if (RB_EMPTY_ROOT(&mm->mm_rb)) {
+		printk("[KGSL] unmapped_area_topdown RB_EMPTY_ROOT(&mm->mm_rb)\n");
 		goto check_highest;
+	}
 	vma = rb_entry(mm->mm_rb.rb_node, struct vm_area_struct, vm_rb);
-	if (vma->rb_subtree_gap < length)
+	if (vma->rb_subtree_gap < length) {
+		printk("[KGSL] unmapped_area_topdown vma->rb_subtree_gap %lu < length %lu\n", vma->rb_subtree_gap, length);
 		goto check_highest;
+	}
 
 	while (true) {
 		/* Visit left subtree if it looks promising */
@@ -1936,8 +1946,10 @@ unsigned long unmapped_area(struct vm_unmapped_area_info *info)
 		gap_start = vma->vm_prev ? vm_end_gap(vma->vm_prev) : 0;
 check_current:
 		/* Check if current node has a suitable gap */
-		if (gap_start > high_limit)
+		if (gap_start > high_limit) {
+			printk("[KGSL] unmapped_area_topdown gap_end %lu < low_limit  %lu\n", gap_end, low_limit);
 			return -ENOMEM;
+		}
 		if (gap_end >= low_limit &&
 		    gap_end > gap_start && gap_end - gap_start >= length)
 			goto found;
@@ -1956,8 +1968,10 @@ check_current:
 		/* Go back up the rbtree to find next candidate node */
 		while (true) {
 			struct rb_node *prev = &vma->vm_rb;
-			if (!rb_parent(prev))
+			if (!rb_parent(prev)) {
+				printk("[KGSL] unmapped_area_topdown !rb_parent(prev)\n");
 				goto check_highest;
+			}
 			vma = rb_entry(rb_parent(prev),
 				       struct vm_area_struct, vm_rb);
 			if (prev == vma->vm_rb.rb_left) {

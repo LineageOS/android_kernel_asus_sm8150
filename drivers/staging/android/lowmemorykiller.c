@@ -571,6 +571,10 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 		}
 
 		oom_score_adj = p->signal->oom_score_adj;
+		//if a process is occupying too much memory, show them on dmesg.
+		if( ((get_mm_rss(p->mm) * (long)PAGE_SIZE / 1048576) > 1000) ){
+			printk("lowmemorykiller: mem_alert: %6d  %8ldkB %8d %s\n",p->pid, get_mm_rss(p->mm) * (long)(PAGE_SIZE / 1024),oom_score_adj, p->comm);
+		}
 		if (oom_score_adj < min_score_adj) {
 			task_unlock(p);
 			continue;
@@ -646,7 +650,7 @@ static unsigned long lowmem_scan(struct shrinker *s, struct shrink_control *sc)
 			(long)(PAGE_SIZE / 1024),
 			sc->gfp_mask);
 
-		if (lowmem_debug_level >= 2 && selected_oom_score_adj == 0) {
+		if (selected_oom_score_adj == 0) {
 			show_mem(SHOW_MEM_FILTER_NODES, NULL);
 			show_mem_call_notifiers();
 			dump_tasks(NULL, NULL);

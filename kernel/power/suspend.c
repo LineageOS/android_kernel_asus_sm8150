@@ -36,6 +36,10 @@
 
 #include "power.h"
 
+bool g_resume_status;
+int pm_stay_unattended_period = 0;
+int pmsp_flag = 0;
+
 const char * const pm_labels[] = {
 	[PM_SUSPEND_TO_IDLE] = "freeze",
 	[PM_SUSPEND_STANDBY] = "standby",
@@ -63,6 +67,18 @@ static DECLARE_WAIT_QUEUE_HEAD(s2idle_wait_head);
 
 enum s2idle_states __read_mostly s2idle_state;
 static DEFINE_RAW_SPINLOCK(s2idle_lock);
+
+DEFINE_TIMER(unattended_timer, unattended_timer_expired, 0, 0);
+
+void unattended_timer_expired(unsigned long data)
+{
+	printk("[PM]unattended_timer_expired\n");
+	ASUSEvtlog("[PM]unattended_timer_expired\n");
+	pm_stay_unattended_period += PM_UNATTENDED_TIMEOUT;
+	pmsp_flag = 1;
+	asus_uts_print_active_locks();
+	mod_timer(&unattended_timer, jiffies + msecs_to_jiffies(PM_UNATTENDED_TIMEOUT));
+}
 
 void s2idle_set_ops(const struct platform_s2idle_ops *ops)
 {
@@ -447,6 +463,7 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 		if (!(suspend_test(TEST_CORE) || *wakeup)) {
 			trace_suspend_resume(TPS("machine_suspend"),
 				state, true);
+			suspend_happened = true;
 			error = suspend_ops->enter(state);
 			trace_suspend_resume(TPS("machine_suspend"),
 				state, false);
@@ -498,6 +515,10 @@ int suspend_devices_and_enter(suspend_state_t state)
 	if (error)
 		goto Close;
 
+	printk("[PM]unattended_timer: del_timer in %s\n", __func__);
+	del_timer(&unattended_timer);
+	pm_stay_unattended_period = 0;
+	g_resume_status = false;
 	suspend_console();
 	suspend_test_start();
 	error = dpm_suspend_start(PMSG_SUSPEND);
@@ -520,6 +541,9 @@ int suspend_devices_and_enter(suspend_state_t state)
 	suspend_test_finish("resume devices");
 	trace_suspend_resume(TPS("resume_console"), state, true);
 	resume_console();
+	printk("[PM]unattended_timer: del_timer in %s\n", __func__);
+	del_timer(&unattended_timer);
+	pm_stay_unattended_period = 0;
 	trace_suspend_resume(TPS("resume_console"), state, false);
 
  Close:
@@ -576,13 +600,14 @@ static int enter_state(suspend_state_t state)
 
 #ifndef CONFIG_SUSPEND_SKIP_SYNC
 	trace_suspend_resume(TPS("sync_filesystems"), 0, true);
-	pr_info("Syncing filesystems ... ");
+	printk("[PM] %s: Syncing filesystems ... \n", __func__);
 	sys_sync();
+	printk("[PM] %s: Syncing done.\n", __func__);
 	pr_cont("done.\n");
 	trace_suspend_resume(TPS("sync_filesystems"), 0, false);
 #endif
 
-	pm_pr_dbg("Preparing system for sleep (%s)\n", mem_sleep_labels[state]);
+	printk("[PM] %s: Preparing system for %s sleep\n", __func__, mem_sleep_labels[state]);
 	pm_suspend_clear_flags();
 	error = suspend_prepare(state);
 	if (error)
@@ -592,14 +617,14 @@ static int enter_state(suspend_state_t state)
 		goto Finish;
 
 	trace_suspend_resume(TPS("suspend_enter"), state, false);
-	pm_pr_dbg("Suspending system (%s)\n", mem_sleep_labels[state]);
+	printk("[PM] %s: Suspending system (%s)\n", __func__, mem_sleep_labels[state]);
 	pm_restrict_gfp_mask();
 	error = suspend_devices_and_enter(state);
 	pm_restore_gfp_mask();
 
  Finish:
 	events_check_enabled = false;
-	pm_pr_dbg("Finishing wakeup.\n");
+	printk("[PM] %s: Finishing wakeup.\n", __func__);
 	suspend_finish();
  Unlock:
 	mutex_unlock(&pm_mutex);
@@ -633,13 +658,15 @@ int pm_suspend(suspend_state_t state)
 		return -EINVAL;
 
 	pm_suspend_marker("entry");
-	pr_info("suspend entry (%s)\n", mem_sleep_labels[state]);
+	printk("[PM] %s: suspend entry (%s)\n", __func__, mem_sleep_labels[state]);
 	error = enter_state(state);
 	if (error) {
 		suspend_stats.fail++;
 		dpm_save_failed_errno(error);
+		printk("[PM] %s: suspend failed, cnt: %d\n", __func__, suspend_stats.fail);
 	} else {
 		suspend_stats.success++;
+		printk("[PM] %s: suspend success, cnt: %d\n", __func__, suspend_stats.success);
 	}
 	pm_suspend_marker("exit");
 	pr_info("suspend exit\n");

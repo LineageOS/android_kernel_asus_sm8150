@@ -406,6 +406,13 @@ fw_get_filesystem_firmware(struct device *device, struct firmware_buf *buf)
 	enum kernel_read_file_id id = READING_FIRMWARE;
 	size_t msize = INT_MAX;
 
+	/* ASUS BSP : For Change ADSP FW loading path to vendor/firmware +++*/
+	char fw_name[5];
+	bool is_ADSP_readed = false;
+	/* ASUS BSP : For Change cpe(WDSP) FW loading path to vendor/firmware */
+	bool is_WDSP_readed = false;
+	/* ASUS BSP ---*/
+
 	/* Already populated data member means we're loading into a buffer */
 	if (buf->data) {
 		id = READING_FIRMWARE_PREALLOC_BUFFER;
@@ -423,20 +430,58 @@ fw_get_filesystem_firmware(struct device *device, struct firmware_buf *buf)
 
 		len = snprintf(path, PATH_MAX, "%s/%s",
 			       fw_path[i], buf->fw_id);
+
+		if (!strncmp(buf->fw_id, "adsp", 4) || !strncmp(buf->fw_id, "slpi", 4) || !strncmp(buf->fw_id, "tfa98xx", 7)
+		 || !strncmp(buf->fw_id, "spss", 4) || strstr(buf->fw_id, "p.sig") || strstr(buf->fw_id, "t.sig")
+		 || strstr(buf->fw_id, "d.sig" )|| !strncmp(buf->fw_id, "npu", 3) || !strncmp(buf->fw_id, "venus", 5)
+		 || !strncmp(buf->fw_id, "cdsp", 4) || !strncmp(buf->fw_id, "widevine", 8)|| !strncmp(buf->fw_id, "cppf", 4))
+			len = snprintf(path, PATH_MAX, "%s/%s",
+					"vendor/firmware", buf->fw_id);
+		else
+			len = snprintf(path, PATH_MAX, "%s/%s",
+					fw_path[i], buf->fw_id);
 		if (len >= PATH_MAX) {
 			rc = -ENAMETOOLONG;
 			break;
 		}
+
+		/* ASUS BSP : For Change ADSP FW loading path to vendor/firmware */
+		snprintf(fw_name, 5, "%s", buf->fw_id);
+		if (!strcmp(fw_name, "adsp")  &&  is_ADSP_readed == false ) {
+			if (!strcmp(buf->fw_id, "adsp.mdt"))    {
+				/*****************************
+				 *  ZS630KL_8150_PRJ_ID = 0x7
+				 *****************************/
+				if ( g_ASUS_prjID == 0x7)
+					dev_err(device, "[ADSP] This ZS630KL project is : SM8150(0x%x) \n", g_ASUS_prjID);
+				else
+					dev_err(device, "[ADSP] Unknown project(0x%x) \n", g_ASUS_prjID);
+			}
+			if ( g_ASUS_prjID == 0x7)	{
+				is_ADSP_readed = true;
+				snprintf(path, PATH_MAX, "%s/%s", "/system/vendor/firmware/q6_sm8150_image", buf->fw_id);
+				dev_err(device, "[ADSP] Try to load firmware : %s \n", path);
+			}
+		}
+		/* ASUS BSP ---*/
+
+		/* ASUS BSP : For Change cpe(WDSP) FW loading path to vendor/firmware */
+		if (!strcmp(fw_name, "cpe_")  &&  is_WDSP_readed == false ) {
+			is_WDSP_readed = true;
+			snprintf(path, PATH_MAX, "%s/%s", "/system/vendor/firmware/cpe_sm8150_image", buf->fw_id);
+			dev_err(device, "[WDSP] Try to load firmware : %s \n", path);
+		}
+		/* ASUS BSP ---*/
 
 		buf->size = 0;
 		rc = kernel_read_file_from_path(path, &buf->data, &size, msize,
 						id);
 		if (rc) {
 			if (rc == -ENOENT)
-				dev_dbg(device, "loading %s failed with error %d\n",
+				dev_err(device, "loading %s failed with error %d\n",
 					 path, rc);
 			else
-				dev_warn(device, "loading %s failed with error %d\n",
+				dev_err(device, "loading %s failed with error %d\n",
 					 path, rc);
 			continue;
 		}

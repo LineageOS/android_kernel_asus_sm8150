@@ -25,6 +25,7 @@
 #include <linux/delay.h>
 #include <linux/input/qpnp-power-on.h>
 #include <linux/of_address.h>
+#include <linux/string.h>
 
 #include <asm/cacheflush.h>
 #include <asm/system_misc.h>
@@ -63,8 +64,33 @@ static void scm_disable_sdi(void);
  * There is no API from TZ to re-enable the registers.
  * So the SDI cannot be re-enabled when it already by-passed.
  */
-static int download_mode = 1;
+int download_mode = 0;
 static struct kobject dload_kobj;
+
+#ifdef FORCE_RAMDUMP_FEATURE
+int g_force_ramdump = 0;
+static int set_download_mode(char *str)
+{
+	if ( strcmp("y", str) == 0 ) {
+		download_mode = 1;
+		g_force_ramdump = 1;
+	} else
+		download_mode = 0;
+
+	printk("download mode = %d\n",download_mode);
+	return 0;
+}
+__setup("RDUMP=", set_download_mode);
+#endif
+
+#ifdef FORCE_WD_RESET_FEATURE
+int get_download_mode(void)
+{
+	return download_mode;
+}
+EXPORT_SYMBOL(get_download_mode);
+#endif
+
 
 #ifdef CONFIG_QCOM_DLOAD_MODE
 #define EDL_MODE_PROP "qcom,msm-imem-emergency_download_mode"
@@ -84,6 +110,9 @@ static void *kaslr_imem_addr;
 static bool scm_dload_supported;
 
 static bool force_warm_reboot;
+
+extern int asus_set_ship_mode(void);
+static bool asus_ship_mode_en;
 
 static int dload_set(const char *val, const struct kernel_param *kp);
 /* interface for exporting attributes */
@@ -133,7 +162,7 @@ int scm_set_dload_mode(int arg1, int arg2)
 				&desc);
 }
 
-static void set_dload_mode(int on)
+void set_dload_mode(int on)
 {
 	int ret;
 
@@ -157,6 +186,11 @@ static bool get_dload_mode(void)
 	return dload_mode_enabled;
 }
 
+//Asus_BSP +++ CVE-2017-13174
+#if defined(ASUS_USER_BUILD)
+	//remove "reboot edl" interface for security
+#else
+//Asus_BSP --- CVE-2017-13174
 static void enable_emergency_dload_mode(void)
 {
 	int ret;
@@ -183,6 +217,9 @@ static void enable_emergency_dload_mode(void)
 	if (ret)
 		pr_err("Failed to set secure EDLOAD mode: %d\n", ret);
 }
+//Asus_BSP +++ CVE-2017-13174
+#endif
+//Asus_BSP --- CVE-2017-13174
 
 static int dload_set(const char *val, const struct kernel_param *kp)
 {
@@ -213,6 +250,14 @@ static int dload_set(const char *val, const struct kernel_param *kp)
 
 	return 0;
 }
+
+void set_QPSTInfo_dloadmode(int mode)
+{
+	download_mode = mode;
+	set_dload_mode(download_mode);
+}
+EXPORT_SYMBOL(set_QPSTInfo_dloadmode);
+
 #else
 static void set_dload_mode(int on)
 {
@@ -245,6 +290,27 @@ static void scm_disable_sdi(void)
 	if (ret)
 		pr_err("Failed to disable secure wdog debug: %d\n", ret);
 }
+
+static int parse_dload_kernel_cmdline(void)
+{
+        char *ptr = saved_command_line;
+        char *target = "dload_mode=on";
+        char *x;
+
+       if (ptr && *ptr) {
+                x = strstr(ptr, target);
+                if (x != NULL) {
+                        pr_info("%s: Download mode enabled\n", __func__);
+                        return 1;
+                } else {
+                        pr_info("%s: Download mode disabled\n", __func__);
+                        return 0;
+                }
+        }
+        pr_info("%s: Kernel Command line read failed.\n", __func__);
+        return 0;
+}
+
 
 void msm_set_restart_mode(int mode)
 {
@@ -287,23 +353,44 @@ static void msm_restart_prepare(const char *cmd)
 
 	if (qpnp_pon_check_hard_reset_stored()) {
 		/* Set warm reset as true when device is in dload mode */
-		if (get_dload_mode() ||
+		if (in_panic || get_dload_mode() ||
 			((cmd != NULL && cmd[0] != '\0') &&
 			!strcmp(cmd, "edl")))
 			need_warm_reset = true;
 	} else {
-		need_warm_reset = (get_dload_mode() ||
+		need_warm_reset = (in_panic || get_dload_mode() ||
 				(cmd != NULL && cmd[0] != '\0'));
+	}
+
+	if (cmd != NULL && (!strcmp(cmd, "EnterShippingMode"))) {
+		pr_info("Powering off the SoC. force enter shipping mode\n");
+		asus_ship_mode_en = 1;
+		asus_set_ship_mode_prepare();
+		asus_set_ship_mode();
 	}
 
 	if (force_warm_reboot)
 		pr_info("Forcing a warm reset of the system\n");
 
-	/* Hard reset the PMIC unless memory contents must be maintained. */
-	if (force_warm_reboot || need_warm_reset)
-		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+#ifdef FORCE_WD_RESET_FEATURE
+	if (cmd != NULL && (!strcmp(cmd, "watchdogreset"))) {
+		force_warm_reboot = false;
+		need_warm_reset = false;
+	}
+#endif
+
+	if(!asus_ship_mode_en)
+	{
+		/* Hard reset the PMIC unless memory contents must be maintained. */
+		if (force_warm_reboot || need_warm_reset)
+			qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+		else
+			qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+	}
 	else
-		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+	{
+		qpnp_pon_system_pwr_off(PON_POWER_OFF_SHUTDOWN);
+	}
 
 	if (cmd != NULL) {
 		if (!strncmp(cmd, "bootloader", 10)) {
@@ -330,7 +417,11 @@ static void msm_restart_prepare(const char *cmd)
 			qpnp_pon_set_restart_reason(
 				PON_RESTART_REASON_KEYS_CLEAR);
 			__raw_writel(0x7766550a, restart_reason);
-		} else if (!strncmp(cmd, "oem-", 4)) {
+		} else if (!strncmp(cmd, "official-unlock", 10)) {
+                                qpnp_pon_set_restart_reason(
+                                PON_RESTART_REASON_UNLOCK);
+                        __raw_writel(0x6f656d08, restart_reason);
+		}else if (!strncmp(cmd, "oem-", 4)) {
 			unsigned long code;
 			int ret;
 
@@ -338,11 +429,37 @@ static void msm_restart_prepare(const char *cmd)
 			if (!ret)
 				__raw_writel(0x6f656d00 | (code & 0xff),
 					     restart_reason);
+		//Asus_BSP +++ CVE-2017-13174
+		#if defined(ASUS_USER_BUILD)
+			//remove "reboot edl" interface for security
+		#else
+		//Asus_BSP --- CVE-2017-13174
 		} else if (!strncmp(cmd, "edl", 3)) {
 			enable_emergency_dload_mode();
+		//Asus_BSP +++ CVE-2017-13174
+		#endif
+		//Asus_BSP --- CVE-2017-13174
+		} else if (!strcmp(cmd, "shutdown")) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_SHUTDOWN);
+			__raw_writel(0x6f656d88, restart_reason);
+		/*} else if (!strcmp(cmd, "EnterShippingMode")) {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_SHIPMODE);
+			__raw_writel(0x6f656d43, restart_reason);*/
+		} else if (!strcmp(cmd, "hardreset")){
+			qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
 		} else {
+			qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_KERNEL);
 			__raw_writel(0x77665501, restart_reason);
 		}
+	}
+
+	if (in_panic) {
+		qpnp_pon_set_restart_reason(
+				PON_RESTART_REASON_PANIC);
+		__raw_writel(0x77665507, restart_reason);
 	}
 
 	flush_cache_all();
@@ -658,6 +775,14 @@ skip_sysfs_create:
 	if (scm_is_call_available(SCM_SVC_PWR, SCM_IO_DEASSERT_PS_HOLD) > 0)
 		scm_deassert_ps_hold_supported = true;
 
+        download_mode = parse_dload_kernel_cmdline();
+
+#ifdef FORCE_RAMDUMP_FEATURE
+	if(g_force_ramdump) {
+		download_mode = 1;
+		dload_type = SCM_DLOAD_FULLDUMP;
+	}
+#endif
 	set_dload_mode(download_mode);
 	if (!download_mode)
 		scm_disable_sdi();

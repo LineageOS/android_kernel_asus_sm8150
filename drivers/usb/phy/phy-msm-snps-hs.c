@@ -86,6 +86,38 @@
 #define USB_HSPHY_1P8_VOL_MAX			1800000 /* uV */
 #define USB_HSPHY_1P8_HPM_LOAD			19000	/* uA */
 
+#define PARAMETER_OVERRIDE_X0			0x6C
+#define PARAMETER_OVERRIDE_X1			0x70
+#define PARAMETER_OVERRIDE_X2			0x74
+#define PARAMETER_OVERRIDE_X3			0x78
+
+unsigned int OVERRIDE_X0;
+module_param(OVERRIDE_X0, uint, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(OVERRIDE_X0, "PARAMETER_OVERRIDE_X0");
+
+unsigned int OVERRIDE_X1;
+module_param(OVERRIDE_X1, uint, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(OVERRIDE_X1, "PARAMETER_OVERRIDE_X1");
+
+unsigned int OVERRIDE_X2;
+module_param(OVERRIDE_X2, uint, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(OVERRIDE_X2, "PARAMETER_OVERRIDE_X2");
+
+unsigned int OVERRIDE_X3;
+module_param(OVERRIDE_X3, uint, S_IRUGO | S_IWUSR);
+MODULE_PARM_DESC(OVERRIDE_X3, "PARAMETER_OVERRIDE_X3");
+
+// ASUS_BSP Hardcode Eye-Diagram Parameters +++
+unsigned int default_device_parameter_0;
+unsigned int default_device_parameter_1;
+unsigned int default_device_parameter_2;
+unsigned int default_device_parameter_3;
+unsigned int default_host_parameter_0;
+unsigned int default_host_parameter_1;
+unsigned int default_host_parameter_2;
+unsigned int default_host_parameter_3;
+// ASUS_BSP Hardcode Eye-Diagram Parameters ---
+
 #define USB_HSPHY_VDD_HPM_LOAD			30000	/* uA */
 
 struct msm_hsphy {
@@ -376,7 +408,7 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 	int ret;
 	u32 rcal_code = 0;
 
-	dev_dbg(uphy->dev, "%s\n", __func__);
+	pr_info("[USB] %s +++\n", __func__);
 
 	ret = msm_hsphy_enable_power(phy, true);
 	if (ret)
@@ -411,6 +443,86 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 	if (phy->param_override_seq)
 		hsusb_phy_write_seq(phy->base, phy->param_override_seq,
 				phy->param_override_seq_cnt, 0);
+
+	//  ********** ASUS_BSP Hardcode Eye-Diagram Parameters **********
+	//  ZS630KL_EVB3 : 2
+	//  ZS630KL_SR :   3
+	//  ZS630KL_ER :   4
+	//  ZS630KL_PR :   5
+	//  ZS630KL_MP :   6
+	pr_info("[USB] %s(): Current hardware ID : (%d)", __func__, g_ASUS_hwID);
+	switch(g_ASUS_hwID){
+		case HW_REV_ER:
+			default_device_parameter_0=0x67;
+			default_device_parameter_1=0x0b;
+			default_device_parameter_2=0x3c;
+			default_device_parameter_3=0x03;
+			default_host_parameter_0=0x67;
+			default_host_parameter_1=0x0b;
+			default_host_parameter_2=0x3c;
+			default_host_parameter_3=0x03;
+		break;
+		case HW_REV_SR:
+			default_device_parameter_0=0xf8;
+			default_device_parameter_1=0x1f;
+			default_device_parameter_2=0x81;
+			default_device_parameter_3=0xc7;
+			default_host_parameter_0=0x67;
+			default_host_parameter_1=0x0b;
+			default_host_parameter_2=0x3c;
+			default_host_parameter_3=0x03;
+		break;
+		case HW_REV_EVB3:
+			default_device_parameter_0=0xf8;
+			default_device_parameter_1=0x1f;
+			default_device_parameter_2=0x81;
+			default_device_parameter_3=0xc7;
+			default_host_parameter_0=0xf8;
+			default_host_parameter_1=0x1f;
+			default_host_parameter_2=0x81;
+			default_host_parameter_3=0xc7;
+		break;
+		case HW_REV_EVB2:
+			default_device_parameter_0=0xf8;
+			default_device_parameter_1=0x1f;
+			default_device_parameter_2=0x81;
+			default_device_parameter_3=0xc7;
+			default_host_parameter_0=0xf8;
+			default_host_parameter_1=0x1f;
+			default_host_parameter_2=0x81;
+			default_host_parameter_3=0xc7;
+		break;
+		default:
+			default_device_parameter_0=0x67;
+			default_device_parameter_1=0x0b;
+			default_device_parameter_2=0x3c;
+			default_device_parameter_3=0x03;
+			default_host_parameter_0=0x67;
+			default_host_parameter_1=0x0b;
+			default_host_parameter_2=0x3c;
+			default_host_parameter_3=0x03;
+		break;
+	}
+	if(phy->phy.flags & PHY_HOST_MODE) {
+		pr_info("[USB] %s():host default modparams val:0x%x %x %x %x\n",
+				__func__, default_host_parameter_0, default_host_parameter_1,
+				default_host_parameter_2, default_host_parameter_3);
+		writel_relaxed(default_host_parameter_0, phy->base + PARAMETER_OVERRIDE_X0);
+		writel_relaxed(default_host_parameter_1, phy->base + PARAMETER_OVERRIDE_X1);
+		writel_relaxed(default_host_parameter_2, phy->base + PARAMETER_OVERRIDE_X2);
+		writel_relaxed(default_host_parameter_3, phy->base + PARAMETER_OVERRIDE_X3);
+	}
+	else
+	{
+		pr_info("[USB] %s():device default modparams val:0x%x %x %x %x\n",
+				__func__, default_device_parameter_0, default_device_parameter_1,
+				default_device_parameter_2, default_device_parameter_3);
+		writel_relaxed(default_device_parameter_0, phy->base + PARAMETER_OVERRIDE_X0);
+		writel_relaxed(default_device_parameter_1, phy->base + PARAMETER_OVERRIDE_X1);
+		writel_relaxed(default_device_parameter_2, phy->base + PARAMETER_OVERRIDE_X2);
+		writel_relaxed(default_device_parameter_3, phy->base + PARAMETER_OVERRIDE_X3);
+	}
+	//  ********** ASUS_BSP Hardcode Eye-Diagram Parameters **********
 
 	if (phy->pre_emphasis) {
 		u8 val = TXPREEMPAMPTUNE0(phy->pre_emphasis) &
@@ -466,6 +578,23 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 				phy->rcal_mask, phy->phy_rcal_reg, rcal_code);
 	}
 
+	/* If tune modparam set, override tune value */
+	pr_info("[USB] %s():userspecified modparams PARAMETER_OVERRIDE_X0 val:0x%x %x %x %x\n",
+	__func__, OVERRIDE_X0, OVERRIDE_X1, OVERRIDE_X2, OVERRIDE_X3);
+
+	if (OVERRIDE_X0)
+		writel_relaxed(OVERRIDE_X0,
+				phy->base + PARAMETER_OVERRIDE_X0);
+	if (OVERRIDE_X1)
+		writel_relaxed(OVERRIDE_X1,
+				phy->base + PARAMETER_OVERRIDE_X1);
+	if (OVERRIDE_X2)
+		writel_relaxed(OVERRIDE_X2,
+				phy->base + PARAMETER_OVERRIDE_X2);
+	if (OVERRIDE_X3)
+		writel_relaxed(OVERRIDE_X3,
+				phy->base + PARAMETER_OVERRIDE_X3);
+
 	/* Use external resistor for tuning if efuse is not programmed */
 	if (!rcal_code)
 		msm_usb_write_readback(phy->base, USB2PHY_USB_PHY_RTUNE_SEL,
@@ -490,6 +619,13 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_CFG0,
 				UTMI_PHY_CMN_CTRL_OVERRIDE_EN, 0);
 
+	pr_info("[USB] Read Param0:%02x, Param1:%02x, Param2:%02x, Param3:%02x\n",
+		readb_relaxed(phy->base + PARAMETER_OVERRIDE_X0),
+		readb_relaxed(phy->base + PARAMETER_OVERRIDE_X1),
+		readb_relaxed(phy->base + PARAMETER_OVERRIDE_X2),
+		readb_relaxed(phy->base + PARAMETER_OVERRIDE_X3));
+
+	pr_info("[USB] %s ---\n", __func__);
 	return 0;
 }
 

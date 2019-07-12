@@ -4221,16 +4221,22 @@ static int mmc_rescan_try_freq(struct mmc_host *host, unsigned freq)
 
 	/* Order's important: probe SDIO, then SD, then MMC */
 	if (!(host->caps2 & MMC_CAP2_NO_SDIO))
-		if (!mmc_attach_sdio(host))
+		if (!mmc_attach_sdio(host)){
+			pr_info("%s: SDIO completed\n", mmc_hostname(host));
 			return 0;
+		}
 
 	if (!(host->caps2 & MMC_CAP2_NO_SD))
-		if (!mmc_attach_sd(host))
+		if (!mmc_attach_sd(host)){
+			pr_info("%s: SD completed\n", mmc_hostname(host));
 			return 0;
+		}
 
 	if (!(host->caps2 & MMC_CAP2_NO_MMC))
-		if (!mmc_attach_mmc(host))
+		if (!mmc_attach_mmc(host)){
+			pr_info("%s: EMMC completed\n", mmc_hostname(host));
 			return 0;
+		}
 
 	mmc_power_off(host);
 	return -EIO;

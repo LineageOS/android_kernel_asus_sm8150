@@ -377,6 +377,58 @@ struct sparse_bind_object {
 	uint64_t flags;
 };
 
+struct kgsl_process_mem_statistics{
+	unsigned int pid;
+	unsigned int id_index;
+
+	unsigned int any0_cnt;
+	unsigned int framebuffer_cnt;
+	unsigned int renderbuffer_cnt;
+	unsigned int arraybuffer_cnt;
+	unsigned int elementarraybuffer_cnt;
+	unsigned int vertexarraybuffer_cnt;
+	unsigned int texture_cnt;
+	unsigned int surface_cnt;
+	unsigned int egl_surface_cnt;
+	unsigned int gl_cnt;
+	unsigned int cl_cnt;
+	unsigned int cl_buffer_map_cnt;
+	unsigned int cl_buffer_nomap_cnt;
+	unsigned int cl_image_map_cnt;
+	unsigned int cl_image_nomap_cnt;
+	unsigned int cl_kernel_stack_cnt;
+	unsigned int command_cnt;
+	unsigned int twod_cnt;
+	unsigned int egl_image_cnt;
+	unsigned int egl_shadow_cnt;
+	unsigned int egl_multisample_cnt;
+
+	unsigned long any0_totalsize;
+	unsigned long framebuffer_totalsize;
+	unsigned long renderbuffer_totalsize;
+	unsigned long arraybuffer_totalsize;
+	unsigned long elementarraybuffer_totalsize;
+	unsigned long vertexarraybuffer_totalsize;
+	unsigned long texture_totalsize;
+	unsigned long surface_totalsize;
+	unsigned long egl_surface_totalsize;
+	unsigned long gl_totalsize;
+	unsigned long cl_totalsize;
+	unsigned long cl_buffer_map_totalsize;
+	unsigned long cl_buffer_nomap_totalsize;
+	unsigned long cl_image_map_totalsize;
+	unsigned long cl_image_nomap_totalsize;
+	unsigned long cl_kernel_stack_totalsize;
+	unsigned long command_totalsize;
+	unsigned long twod_totalsize;
+	unsigned long egl_image_totalsize;
+	unsigned long egl_shadow_totalsize;
+	unsigned long egl_multisample_totalsize;
+};
+
+struct kgsl_process_mem_statistics kgsl_mem_count(struct kgsl_process_private *private);
+void kgsl_mem_statistics_print(struct kgsl_process_mem_statistics kgsl_mem_statistics);
+
 long kgsl_ioctl_device_getproperty(struct kgsl_device_private *dev_priv,
 					  unsigned int cmd, void *data);
 long kgsl_ioctl_device_setproperty(struct kgsl_device_private *dev_priv,

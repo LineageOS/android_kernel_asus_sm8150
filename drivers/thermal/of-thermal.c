@@ -212,7 +212,7 @@ static int of_thermal_set_trips(struct thermal_zone_device *tz,
 {
 	struct __thermal_zone *data = tz->devdata;
 	int high = INT_MAX, low = INT_MIN, ret = 0;
-
+	
 	if (!data->senps || !data->senps->ops->set_trips)
 		return -EINVAL;
 

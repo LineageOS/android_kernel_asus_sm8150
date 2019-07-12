@@ -42,6 +42,8 @@ static DEFINE_SPINLOCK(pause_on_oops_lock);
 bool crash_kexec_post_notifiers;
 int panic_on_warn __read_mostly;
 
+int g_print_warn = 0;
+
 int panic_timeout = CONFIG_PANIC_TIMEOUT;
 EXPORT_SYMBOL_GPL(panic_timeout);
 
@@ -512,6 +514,7 @@ void print_oops_end_marker(void)
  */
 void oops_exit(void)
 {
+	g_print_warn = 1;
 	do_oops_enter_exit();
 	print_oops_end_marker();
 	kmsg_dump(KMSG_DUMP_OOPS);
@@ -526,6 +529,7 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 	    struct pt_regs *regs, struct warn_args *args)
 {
 	disable_trace_on_warning();
+	g_print_warn = 1;
 
 	pr_warn("------------[ cut here ]------------\n");
 
@@ -562,6 +566,7 @@ void __warn(const char *file, int line, void *caller, unsigned taint,
 
 	/* Just a warning, don't kill lockdep. */
 	add_taint(taint, LOCKDEP_STILL_OK);
+	g_print_warn = 0;
 }
 
 #ifdef WANT_WARN_ON_SLOWPATH

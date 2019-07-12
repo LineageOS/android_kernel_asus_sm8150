@@ -1,3 +1,4 @@
+
 /*
  * drivers/mmc/host/sdhci-msm.c - Qualcomm Technologies, Inc. MSM SDHCI Platform
  * driver source file
@@ -2535,8 +2536,14 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 		goto out;
 	}
 
-	vreg_table[0] = curr_slot->vdd_data;
-	vreg_table[1] = curr_slot->vdd_io_data;
+
+	if(!strcmp(mmc_hostname(pdata->mmc), "mmc0") && !enable) {
+		vreg_table[1] = curr_slot->vdd_data;
+		vreg_table[0] = curr_slot->vdd_io_data;
+	} else {
+		vreg_table[0] = curr_slot->vdd_data;
+		vreg_table[1] = curr_slot->vdd_io_data;
+	}
 
 	for (i = 0; i < ARRAY_SIZE(vreg_table); i++) {
 		if (vreg_table[i]) {
@@ -4812,6 +4819,7 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "No device tree node\n");
 		goto pltfm_free;
 	}
+	msm_host->pdata->mmc = host->mmc;
 
 	/* Setup Clocks */
 

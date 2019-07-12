@@ -77,6 +77,10 @@ static u64 resume_cycles;
 
 core_param(irqtime, irqtime, int, 0400);
 
+bool gpio_dump_control; /* /sys/module/sched_clock/parameters/gpio_dump_control, default is N */
+module_param(gpio_dump_control, bool, 0644);
+MODULE_PARM_DESC(gpio_dump_control, "Enable/Disable dump GPIO state before suspend");
+
 static u64 notrace jiffy_sched_clock_read(void)
 {
 	/*
@@ -277,7 +281,7 @@ static u64 notrace suspended_sched_clock_read(void)
 
 	return cd.read_data[seq & 1].epoch_cyc;
 }
-
+extern void suspend_msm_gpio_dbg_show(void);
 int sched_clock_suspend(void)
 {
 	struct clock_read_data *rd = &cd.read_data[0];
@@ -290,6 +294,12 @@ int sched_clock_suspend(void)
 				rd->epoch_ns, rd->epoch_cyc);
 	hrtimer_cancel(&sched_clock_timer);
 	rd->read_sched_clock = suspended_sched_clock_read;
+
+	if(gpio_dump_control)
+	{
+		printk("dump gpio\n");
+		suspend_msm_gpio_dbg_show();
+	}
 
 	return 0;
 }

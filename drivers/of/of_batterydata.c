@@ -342,6 +342,7 @@ struct device_node *of_batterydata_get_best_profile(
 	 * Find the battery data with a battery id resistor closest to this one
 	 */
 	for_each_child_of_node(batterydata_container_node, node) {
+
 		if (batt_type != NULL) {
 			rc = of_property_read_string(node, "qcom,battery-type",
 							&battery_type);
