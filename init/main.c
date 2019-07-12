@@ -154,23 +154,6 @@ static int set_ftm_mode(char *str)
 }
 __setup("androidboot.pre-ftm=", set_ftm_mode);
 
-// ASUS_BSP +++ get permissive status
-int permissive_enable = 0;
-EXPORT_SYMBOL(permissive_enable);
-static int get_permissive_status(char *str)
-{
-	
-	if( strcmp("permissive", str) == 0 )
-	{
-		permissive_enable = 1;
-		printk("permissive = %d\n", permissive_enable);
-	}
-
-	return 0;
-}
-__setup("androidboot.selinux=", get_permissive_status);
-// ASUS_BSP --- get permissive status
-
 //[+++]ASUS : Add for kernel charger mode
 bool g_Charger_mode = false;
 static int set_charger_mode(char *str)
