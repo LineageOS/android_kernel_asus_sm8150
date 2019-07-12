@@ -94,10 +94,6 @@ enum DEVICE_DDRID
 };
 extern enum DEVICE_DDRID g_ASUS_ddrID;
 
-// ASUS_BSP +++ get permissive status
-extern int permissive_enable;
-// ASUS_BSP --- get permissive status
-
 #define FORCE_RAMDUMP_FEATURE 1
 #define FORCE_WD_RESET_FEATURE 1
 
