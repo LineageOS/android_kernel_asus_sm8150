@@ -29,7 +29,7 @@ static DEFINE_SPINLOCK(googlekey_slock);
 #define GLITCH_RETRY_COUNT	0
 #endif
 
-static int g_google_key_code = KEY_ASUS_GOOGLE_ASSISTANT;
+static int g_google_key_code = KEY_ASSISTANT;
 
 static void googlekey_report_function(struct work_struct *work);
 static void googlekey_double_check(struct work_struct *work);
@@ -94,7 +94,7 @@ static ssize_t store_googlekey_enable(struct device *dev,
 			{
 				pr_info("[keypad] googlekey_irq_wakup=%d \n",googlekey_irq_wakup);
 			}
-			g_google_key_code = KEY_ASUS_GOOGLE_ASSISTANT;
+			g_google_key_code = KEY_ASSISTANT;
 			ddata->key_press_queued = false;
 			ddata->key_release_queued = false;
 		} else if(g_googlekey_enable == 1) {
@@ -107,7 +107,7 @@ static ssize_t store_googlekey_enable(struct device *dev,
 				googlekey_irq_wakup=1;
 				pr_info("[keypad] enable googlekey wakeup \n");
 			}
-			g_google_key_code = KEY_ASUS_GOOGLE_ASSISTANT;
+			g_google_key_code = KEY_ASSISTANT;
 			ddata->key_press_queued = false;
 			ddata->key_release_queued = false;
 		} else if(g_googlekey_enable == 2) {
@@ -459,7 +459,7 @@ static int __init googlekey_driver_probe(struct platform_device *pdev)
 	input->name = GOOGLEKEY_DEVICE_NAME;
 	input->phys = GOOGLEKEY_PHYS;
 	set_bit(EV_KEY, input->evbit);
-	set_bit(KEY_ASUS_GOOGLE_ASSISTANT, input->keybit);
+	set_bit(KEY_ASSISTANT, input->keybit);
 	set_bit(BTN_0, input->keybit);
 
 
