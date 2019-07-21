@@ -33,12 +33,12 @@
 #include <linux/input.h>
 #include <linux/jiffies.h>
 #include <linux/miscdevice.h>
-#include "config.h"
-#include "tfa98xx.h"
-#include "tfa.h"
+#include "inc/config.h"
+#include "inc/tfa98xx.h"
+#include "inc/tfa.h"
 
 /* required for enum tfa9912_irq */
-#include "tfa98xx_tfafieldnames.h"
+#include "inc/tfa98xx_tfafieldnames.h"
 
 #define TFA98XX_VERSION	TFA98XX_API_REV_STR
 

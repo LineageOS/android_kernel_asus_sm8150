@@ -16,8 +16,8 @@
 
 #include "inc/dbgprint.h"
 #include "inc/tfa_container.h"
-#include "tfa.h"
-#include "tfa98xx_tfafieldnames.h"
+#include "inc/tfa.h"
+#include "inc/tfa98xx_tfafieldnames.h"
 #include "tfa_internal.h"
 
 /* handle macro for bitfield */
