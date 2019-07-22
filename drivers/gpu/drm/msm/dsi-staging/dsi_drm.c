@@ -814,23 +814,42 @@ int dsi_conn_post_kickoff(struct drm_connector *connector)
 struct drm_bridge *bridge4pm;
 int display_early_init = 0;
 
+extern int dsi_clk_examine_validity(void *client, enum dsi_clk_type clk, bool suspend_fix);
+void dsi_suspend_clock_check(struct drm_bridge *bridge)
+{
+	struct dsi_display *display;
+	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
+
+	if (!bridge) {
+		pr_err("[Display] Invalid params\n");
+		return;
+	}
+
+	display = c_bridge->display;
+
+	dsi_clk_examine_validity(display->dsi_clk_handle,
+			DSI_CORE_CLK, true /* fix suspend state */);
+}
+
 void dsi_suspend (void)
 {
-	pr_err("dsi_suspend++\n");
+	printk("[Display] dsi_suspend++\n");
 	dsi_bridge_disable(bridge4pm);
 	dsi_bridge_post_disable(bridge4pm);
 	display_early_init = 0;
-	pr_err("dsi_suspend--\n");
+
+	dsi_suspend_clock_check(bridge4pm);
+	printk("[Display] dsi_suspend--\n");
 }
 EXPORT_SYMBOL(dsi_suspend);
 
 void dsi_resume (void)
 {
-	pr_err("dsi_resume++\n");
+	printk("[Display] dsi_resume++\n");
 	display_early_init = 1;
 	dsi_bridge_pre_enable(bridge4pm);
 	dsi_bridge_enable(bridge4pm);
-	pr_err("dsi_resume---\n");
+	printk("[Display] dsi_resume---\n");
 }
 EXPORT_SYMBOL(dsi_resume);
 

@@ -95,7 +95,7 @@ enum DEVICE_DDRID
 extern enum DEVICE_DDRID g_ASUS_ddrID;
 
 #define FORCE_RAMDUMP_FEATURE 1
-#define FORCE_WD_RESET_FEATURE 1
+//#define FORCE_WD_RESET_FEATURE 1
 
 #define USHRT_MAX	((u16)(~0U))
 #define SHRT_MAX	((s16)(USHRT_MAX>>1))

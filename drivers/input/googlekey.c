@@ -167,6 +167,17 @@ static irqreturn_t googlekey_interrupt_handler(int irq, void *dev_id)
 #endif
 	//printk("[keypad] googlekey_interrupt_handler\n");
 	WARN_ONCE(irq != ddata->irq, "googlekey_interrupt failed\n");
+	
+	if(g_googlekey_enable == 0)
+	{
+		ddata->sendVirtualPress = false;
+		ddata->oldGpioValue = 2;
+		ddata->keyState = 0;
+		ddata->key_press_queued = false;
+		ddata->key_release_queued = false;
+		printk("[keypad] googlekey is disabled\n");
+		return IRQ_HANDLED;
+	}
 
 #ifdef GOOGLE_KEY_AVOID_GLITCH
 	//while( retry <= GLITCH_RETRY_COUNT ) { // try tree times for stable
@@ -262,11 +273,11 @@ static void googlekey_report_function(struct work_struct *work)
 	//int value;
 	unsigned long flags;
 
-	if(g_googlekey_enable == 0)
+/*	if(g_googlekey_enable == 0)
 	{
 		printk("[keypad] googlekey is disabled\n");
 		return;
-	}
+	}*/
 
 #ifdef GOOGLE_KEY_AVOID_GLITCH
 	spin_lock_irqsave(&googlekey_slock, flags);
@@ -277,7 +288,7 @@ static void googlekey_report_function(struct work_struct *work)
 		ddata->sendVirtualPress = false;
 		ddata->keyState = 1;
 		pr_info("[keypad] googlekey Virtual Press report\n");
-		msleep(15);
+		mdelay(15);//msleep(15);
 	}
 
 	if (ddata->key_press_queued){
@@ -287,7 +298,7 @@ static void googlekey_report_function(struct work_struct *work)
 		ddata->keyState = 1;
 		pr_info("[keypad] googlekey EV_KEY report = %d\n",  1);
 		if(ddata->key_release_queued)
-			msleep(15);
+			mdelay(15);//msleep(15);
 		else
 			schedule_delayed_work(&ddata->dcwork, msecs_to_jiffies(300));
 	}

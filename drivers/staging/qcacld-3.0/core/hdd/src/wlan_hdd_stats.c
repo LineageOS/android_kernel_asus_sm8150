@@ -4483,6 +4483,8 @@ static int wlan_hdd_get_sta_stats(struct wiphy *wiphy,
 		  (int)rx_mcs_index);
 	hdd_debug("NSS: TX: %d, RX: %d", (int)tx_nss, (int)rx_nss);
 
+	printk("[wlan]: RSSI=%d, Rate=(%d, %d), flags=(0x%x, 0x%x), MCS=(%d,%d), NSS=(%d,%d).\n", sinfo->signal, my_tx_rate, my_rx_rate, (int)tx_rate_flags, (int)rx_rate_flags, (int)tx_mcs_index, (int)rx_mcs_index, (int)tx_nss, (int)rx_nss);
+
 	/* assume basic BW. anything else will override this later */
 	hdd_set_rate_bw(&sinfo->txrate, HDD_RATE_BW_20);
 
