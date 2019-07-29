@@ -40,8 +40,6 @@
 #include "tune.h"
 #include "walt.h"
 
-extern int g_ftm_mode;
-
 #ifdef CONFIG_SMP
 static inline bool task_fits_max(struct task_struct *p, int cpu);
 #endif /* CONFIG_SMP */
@@ -9617,9 +9615,8 @@ static void update_cpu_capacity(struct sched_domain *sd, int cpu)
 		mcc->cpu = cpu;
 #ifdef CONFIG_SCHED_DEBUG
 		raw_spin_unlock_irqrestore(&mcc->lock, flags);
-		if (!g_ftm_mode)
-//			printk_deferred("CPU%d: update max cpu_capacity %lu\n",
-//							cpu, capacity);
+		printk_deferred("CPU%d: update max cpu_capacity %lu\n",
+							cpu, capacity);
 		goto skip_unlock;
 #endif
 	}
