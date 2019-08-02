@@ -1,0 +1,22 @@
+--- ../../../UL-ASUS_I01WD-ASUS-16.1220.1906.167-1.1.1-user/kernel/kernel/msm-4.14/arch/arm64/boot/dts/qcom/pm8150b.dtsi	2019-07-18 13:27:08.000000000 +0200
++++ arch/arm64/boot/dts/qcom/pm8150b.dtsi	2019-08-01 07:59:36.000000000 +0200
+@@ -496,7 +496,7 @@
+ 			interrupt-names = "hap-sc-irq", "hap-play-irq";
+ 			qcom,actuator-type = "lra";
+ 			qcom,vmax-mv = <2420>;
+-			qcom,play-rate-us = <5100>;
++			qcom,play-rate-us = <4255>;
+ 			qcom,wf-brake-pattern = [02 02 02 02];
+ 			qcom,lra-resonance-sig-shape = "sine";
+ 			qcom,lra-auto-resonance-mode = "qwd";
+@@ -505,8 +505,8 @@
+ 				/* CLICK */
+ 				qcom,effect-id = <0>;
+ 				qcom,wf-vmax-mv = <3596>;
+-				qcom,wf-pattern = [3e];
+-				qcom,wf-play-rate-us = <5000>;
++				qcom,wf-pattern = [3e 3e 3e];
++				qcom,wf-play-rate-us = <4255>;
+ 				qcom,wf-brake-pattern = [02 02 00 00];
+ 			};
+ 			wf_1 {
