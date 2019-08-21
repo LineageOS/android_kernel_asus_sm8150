@@ -317,6 +317,12 @@ static const struct file_operations proc_asusdebug_operations = {
 	.open	   = asusdebug_open,
 	.release	= asusdebug_release,
 };
+static const struct file_operations proc_asusdebugprop_operations = {
+	.read	   = asusdebug_read,
+	.write	  = asusdebug_write,
+	.open	   = asusdebug_open,
+	.release	= asusdebug_release,
+};
 
 int g_QPST_property = 0;
 extern void set_QPSTInfo_dloadmode(int mode);
@@ -612,6 +618,7 @@ static int __init proc_asusdebug_init(void)
 {
 
 	proc_create("asusdebug", S_IALLUGO, NULL, &proc_asusdebug_operations);
+	proc_create("asusdebug-prop", S_IALLUGO, NULL, &proc_asusdebugprop_operations);
 	proc_create("asusevtlog", S_IRWXUGO, NULL, &proc_asusevtlog_operations);
 	proc_create("asusevtlog-switch", S_IRWXUGO, NULL, &proc_evtlogswitch_operations);
 	proc_create("QPSTInfo", S_IRWXUGO, NULL, &proc_QPSTInfo_operations);

@@ -1810,7 +1810,7 @@ static int msm_pm_suspend(struct device *dev)
 	struct msm_drm_private *priv;
 	struct msm_kms *kms;
 
-	pr_err("going to suspend\n");
+	printk("[Display] pm suspend\n");
 	dsi_suspend();
 
 	if (!dev)
@@ -1838,6 +1838,8 @@ static int msm_pm_resume(struct device *dev)
 	struct msm_drm_private *priv;
 	struct msm_kms *kms;
 	int val;
+
+	printk("[Display] pm resume\n");
 
 	if (display_early_on) {
 		g_dev = dev;

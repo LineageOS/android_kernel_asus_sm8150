@@ -813,6 +813,7 @@ int dsi_conn_post_kickoff(struct drm_connector *connector)
 
 struct drm_bridge *bridge4pm;
 int display_early_init = 0;
+extern struct mutex dsi_op_mutex;
 
 extern int dsi_clk_examine_validity(void *client, enum dsi_clk_type clk, bool suspend_fix);
 void dsi_suspend_clock_check(struct drm_bridge *bridge)
@@ -834,11 +835,15 @@ void dsi_suspend_clock_check(struct drm_bridge *bridge)
 void dsi_suspend (void)
 {
 	printk("[Display] dsi_suspend++\n");
+	mutex_lock(&dsi_op_mutex);
+
 	dsi_bridge_disable(bridge4pm);
 	dsi_bridge_post_disable(bridge4pm);
 	display_early_init = 0;
 
 	dsi_suspend_clock_check(bridge4pm);
+
+	mutex_unlock(&dsi_op_mutex);
 	printk("[Display] dsi_suspend--\n");
 }
 EXPORT_SYMBOL(dsi_suspend);
@@ -846,9 +851,13 @@ EXPORT_SYMBOL(dsi_suspend);
 void dsi_resume (void)
 {
 	printk("[Display] dsi_resume++\n");
+	mutex_lock(&dsi_op_mutex);
+
 	display_early_init = 1;
 	dsi_bridge_pre_enable(bridge4pm);
 	dsi_bridge_enable(bridge4pm);
+
+	mutex_unlock(&dsi_op_mutex);
 	printk("[Display] dsi_resume---\n");
 }
 EXPORT_SYMBOL(dsi_resume);

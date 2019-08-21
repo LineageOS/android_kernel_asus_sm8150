@@ -441,6 +441,17 @@ int msm_dss_clk_set_rate(struct dss_clk *clk_arry, int num_clk)
 } /* msm_dss_clk_set_rate */
 EXPORT_SYMBOL(msm_dss_clk_set_rate);
 
+int msm_dss_clk_voting_counter = 0;
+void msm_dss_record_clk(const char* clk_name, int enable)
+{
+	if (!strncmp(clk_name, "vsync_clk", 9)) {
+		if (enable)
+			msm_dss_clk_voting_counter++;
+		else
+			msm_dss_clk_voting_counter--;
+	}
+}
+
 int msm_dss_enable_clk(struct dss_clk *clk_arry, int num_clk, int enable)
 {
 	int i, rc = 0;
@@ -457,6 +468,9 @@ int msm_dss_enable_clk(struct dss_clk *clk_arry, int num_clk, int enable)
 						__builtin_return_address(0),
 						__func__,
 						clk_arry[i].clk_name, rc);
+
+				// record it
+				msm_dss_record_clk(clk_arry[i].clk_name, enable);
 			} else {
 				DEV_ERR("%pS->%s: '%s' is not available\n",
 					__builtin_return_address(0), __func__,
@@ -476,9 +490,11 @@ int msm_dss_enable_clk(struct dss_clk *clk_arry, int num_clk, int enable)
 				__builtin_return_address(0), __func__,
 				clk_arry[i].clk_name);
 
-			if (clk_arry[i].clk)
+			if (clk_arry[i].clk) {
 				clk_disable_unprepare(clk_arry[i].clk);
-			else
+				// record it
+				msm_dss_record_clk(clk_arry[i].clk_name, enable);
+			} else
 				DEV_ERR("%pS->%s: '%s' is not available\n",
 					__builtin_return_address(0), __func__,
 					clk_arry[i].clk_name);

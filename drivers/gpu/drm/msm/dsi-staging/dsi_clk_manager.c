@@ -1150,13 +1150,13 @@ int dsi_clk_examine_validity(void *client, enum dsi_clk_type clk, bool suspend_f
 			printk("[Display] possible clock voting unbalanced\n");
 
 		if (c->core_refcount > 0 && suspend_fix) {
-			c->core_refcount++;
+			c->core_refcount = 0;
 			c->core_clk_state = DSI_CLK_OFF;
 			changed = true;
 		}
 
 		if (c->link_refcount > 0 && suspend_fix) {
-			c->link_refcount++;
+			c->link_refcount = 0;
 			c->link_clk_state = DSI_CLK_OFF;
 			changed = true;
 		}

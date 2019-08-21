@@ -2314,8 +2314,8 @@ static int init_batt_cycle_count_data(void)
 			return -1;
 		}
 
-		BAT_DBG("reload_condition=%d;high_temp_total_time=%lu;high_temp_vol_time=%lu;high_vol_total_time=%lu;battery_total_time=%lu\n",
-			buf.reload_condition, buf.high_temp_total_time,buf.high_temp_vol_time,buf.high_vol_total_time,buf.battery_total_time);
+		BAT_DBG("cycle_count=%d;reload_condition=%d;high_temp_total_time=%lu;high_temp_vol_time=%lu;high_vol_total_time=%lu;battery_total_time=%lu\n",
+			buf.cycle_count,buf.reload_condition, buf.high_temp_total_time,buf.high_temp_vol_time,buf.high_vol_total_time,buf.battery_total_time);
 	}
 	BAT_DBG("Cycle count data initialize success!\n");
 	g_cyclecount_initialized = true;
@@ -2664,7 +2664,7 @@ static void battery_health_data_reset(void){
 extern int batt_health_csc_backup(void);
 static int resotre_bat_health(void)
 {
-	int i=0, rc = 0;
+	int i=0, rc = 0, count =0;
 
 	memset(&g_bat_health_data_backup,0,sizeof(struct BAT_HEALTH_DATA_BACKUP)*BAT_HEALTH_NUMBER_MAX);
 
@@ -2676,10 +2676,20 @@ static int resotre_bat_health(void)
 		return -1;
 	}
 
-	BAT_DBG("index(%d)\n", g_bat_health_data_backup[0].health);
 	for(i=1; i<BAT_HEALTH_NUMBER_MAX;i++){
 		BAT_DBG("%s %d",g_bat_health_data_backup[i].date, g_bat_health_data_backup[i].health);
+
+		if(g_bat_health_data_backup[i].health!=0){
+			count++;
+		}
 	}
+
+	if(count >= BAT_HEALTH_NUMBER_MAX-1){
+		g_health_upgrade_index = BAT_HEALTH_NUMBER_MAX-1;
+		g_bat_health_data_backup[0].health = BAT_HEALTH_NUMBER_MAX-1;
+	}
+    
+   	BAT_DBG("index(%d)\n", g_bat_health_data_backup[0].health);
 
 	g_health_upgrade_index = g_bat_health_data_backup[0].health;
 	g_bathealth_initialized = true;
@@ -2687,6 +2697,14 @@ static int resotre_bat_health(void)
 	batt_health_csc_backup();
 	//batt_safety_csc_backup();
 	return 0;
+}
+
+static void resequencing_bat_health_data(void){
+    int i;
+
+    for(i=1; i < BAT_HEALTH_NUMBER_MAX-1 ; i++){
+        memcpy(&g_bat_health_data_backup[i], &g_bat_health_data_backup[i+1], sizeof(struct BAT_HEALTH_DATA_BACKUP));
+    }
 }
 
 static int backup_bat_health(void)
@@ -2703,12 +2721,16 @@ static int backup_bat_health(void)
 
 	bat_health = g_bat_health_data.bat_health;
 
-	if(g_health_upgrade_index == BAT_HEALTH_NUMBER_MAX-1){
-		g_health_upgrade_index = 1;
+	if(g_health_upgrade_index >= BAT_HEALTH_NUMBER_MAX-1){
+        g_health_upgrade_index = BAT_HEALTH_NUMBER_MAX-1;
 	}else{
 		g_health_upgrade_index++;
 	}
 
+	if(g_health_upgrade_index >= BAT_HEALTH_NUMBER_MAX-1){
+		resequencing_bat_health_data();
+	}
+    
 	sprintf(g_bat_health_data_backup[g_health_upgrade_index].date, "%d-%02d-%02d %02d:%02d:%02d", tm.tm_year+1900,tm.tm_mon+1, tm.tm_mday,tm.tm_hour,tm.tm_min,tm.tm_sec);
 	g_bat_health_data_backup[g_health_upgrade_index].health = bat_health;
 	g_bat_health_data_backup[0].health = g_health_upgrade_index;
@@ -6747,7 +6769,7 @@ static int fg_gen4_probe(struct platform_device *pdev)
 	if (rc < 0) {
 		dev_err(fg->dev, "[BAT][CHG] failed to register ASUS bat_ver_extcon device rc=%d\n", rc);
 	}
-	asus_extcon_set_name(fg->bat_ver_extcon, "C11P1806-O-01-0001-6.1210.1904.131");
+	asus_extcon_set_name(fg->bat_ver_extcon, "C11P1806-O-01-0001-16.1220.1907.183");
 
 	fg->bat_id_extcon = extcon_dev_allocate(asus_fg_extcon_cable);
 	if (IS_ERR(fg->bat_id_extcon)) {
