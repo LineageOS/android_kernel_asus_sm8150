@@ -26,7 +26,6 @@
 #include <linux/spinlock.h>
 #include <linux/notifier.h>
 #include <linux/suspend.h>
-#include <linux/delay.h>
 
 
 #define MAX_WAKEUP_REASON_IRQS 32
@@ -36,71 +35,29 @@ static bool suspend_abort;
 static char abort_reason[MAX_SUSPEND_ABORT_LEN];
 static struct kobject *wakeup_reason;
 static DEFINE_SPINLOCK(resume_reason_lock);
-bool need_network_uid = false;
-static int network_uid = -1;
 
 static ktime_t last_monotime; /* monotonic time before last suspend */
 static ktime_t curr_monotime; /* monotonic time after last suspend */
 static ktime_t last_stime; /* monotonic boottime offset before last suspend */
 static ktime_t curr_stime; /* monotonic boottime offset after last suspend */
 
-static bool is_network_irq(int irq) {
-	//TODO: get network irq automatically
-	if(irq == 171 || irq == 167) {
-		return true;
-	}
-	return false;
-}
-
-void set_network_uid(int uid) {
-	spin_lock(&resume_reason_lock);
-	if(need_network_uid){
-		need_network_uid = false;
-		network_uid = uid;
-	}
-	spin_unlock(&resume_reason_lock);
-}
-
-static void wait_network_uid(void) {
-	int i;
-	for(i = 0; i < 5; i++){
-		if(!need_network_uid) break;
-		usleep_range(1000, 2000);
-	}
-	printk(KERN_INFO "%s need_network_uid=%d, network_uid=%d\n", __func__, need_network_uid, network_uid);
-}
-
 static ssize_t last_resume_reason_show(struct kobject *kobj, struct kobj_attribute *attr,
 		char *buf)
 {
 	int irq_no, buf_offset = 0;
 	struct irq_desc *desc;
-
-	if(need_network_uid) {
-		wait_network_uid();
-	}
-
 	spin_lock(&resume_reason_lock);
 	if (suspend_abort) {
 		buf_offset = sprintf(buf, "Abort: %s", abort_reason);
 	} else {
 		for (irq_no = 0; irq_no < irqcount; irq_no++) {
 			desc = irq_to_desc(irq_list[irq_no]);
-			if (network_uid != -1) {
-				if (desc && desc->action && desc->action->name)
-					buf_offset += sprintf(buf + buf_offset, "%d %s uid:%d\n",
-							irq_list[irq_no], desc->action->name, network_uid);
-				else
-					buf_offset += sprintf(buf + buf_offset, "%d uid:%d\n",
-							irq_list[irq_no], network_uid);
-			} else {
-				if (desc && desc->action && desc->action->name)
-					buf_offset += sprintf(buf + buf_offset, "%d %s\n",
-							irq_list[irq_no], desc->action->name);
-				else
-					buf_offset += sprintf(buf + buf_offset, "%d\n",
-							irq_list[irq_no]);
-			}
+			if (desc && desc->action && desc->action->name)
+				buf_offset += sprintf(buf + buf_offset, "%d %s\n",
+						irq_list[irq_no], desc->action->name);
+			else
+				buf_offset += sprintf(buf + buf_offset, "%d\n",
+						irq_list[irq_no]);
 		}
 	}
 	spin_unlock(&resume_reason_lock);
@@ -162,10 +119,6 @@ void log_wakeup_reason(int irq)
 		printk(KERN_INFO "Resume caused by IRQ %d\n", irq);
 
 	spin_lock(&resume_reason_lock);
-	if(is_network_irq(irq)) {
-		need_network_uid = true;
-	}
-
 	if (irqcount == MAX_WAKEUP_REASON_IRQS) {
 		spin_unlock(&resume_reason_lock);
 		printk(KERN_WARNING "Resume caused by more than %d IRQs\n",
@@ -217,7 +170,6 @@ static int wakeup_reason_pm_event(struct notifier_block *notifier,
 {
 	switch (pm_event) {
 	case PM_SUSPEND_PREPARE:
-		set_network_uid(-1);
 		spin_lock(&resume_reason_lock);
 		irqcount = 0;
 		suspend_abort = false;

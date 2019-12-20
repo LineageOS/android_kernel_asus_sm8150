@@ -84,9 +84,6 @@
 
 #include <crypto/hash.h>
 #include <linux/scatterlist.h>
-extern bool need_network_uid;
-extern void set_network_uid(int uid);
-
 
 #ifdef CONFIG_TCP_MD5SIG
 static int tcp_v4_md5_hash_hdr(char *md5_hash, const struct tcp_md5sig_key *key,
@@ -1659,11 +1656,6 @@ lookup:
 			       th->dest, sdif, &refcounted);
 	if (!sk)
 		goto no_tcp_socket;
-
-	if(need_network_uid) {
-		printk(KERN_INFO "%s,tcp wakeup sock uid: %d\n", __func__, sk->sk_uid.val);
-		set_network_uid(sk->sk_uid.val);
-	}
 
 process:
 	if (sk->sk_state == TCP_TIME_WAIT)

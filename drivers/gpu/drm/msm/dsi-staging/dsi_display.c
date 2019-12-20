@@ -83,6 +83,7 @@ static const struct of_device_id dsi_display_dt_match[] = {
 #define ASUS_MIPI_PROC_FILE      "driver/lcd_mipi_boost_flag"
 #define ASUS_EARLY_ON_PROC_FILE  "driver/lcd_early_on"
 #define ASUS_BKLT_CTL_PROC_FILE  "driver/lcd_bl"
+#define ASUS_CLK_DBG_PROC_FILE   "driver/lcd_clk_debug"
 #define ASUS_LCD_UNIQUE_ID       "lcd_unique_id"
 
 #define ASUS_LCD_REG_RW_MIN_LEN  2
@@ -108,6 +109,7 @@ int asus_lcd_esd_debug = 0;
 int asus_lcd_mipi_flag = 0x01; //bit 0: for boost enable, bit 1: for dsi phy reg log
 int asus_lcd_early_backlight = 0;
 int asus_lcd_blkt_ctrl = 1;
+int asus_lcd_clk_debug = 0;
 enum {
 	SR_panel = 1,
 	ER_panel,
@@ -5344,6 +5346,52 @@ static struct file_operations asus_lcd_mipi_proc_ops = {
 	.read = asus_lcd_mipi_proc_read,
 };
 
+static ssize_t asus_lcd_clk_dbg_proc_write(struct file *filp, const char *buff, size_t len, loff_t *off)
+{
+	char messages[256];
+
+	memset(messages, 0, sizeof(messages));
+
+	if (len > 256)
+		len = 256;
+
+	if (copy_from_user(messages, buff, len))
+		return -EFAULT;
+
+	if(strncmp(messages, "0", 1) == 0)
+		asus_lcd_clk_debug = 0;
+	else if(strncmp(messages, "1", 1) == 0)
+		asus_lcd_clk_debug = 1;
+
+	printk("[Display] clk debug set to: %d\n", asus_lcd_clk_debug);
+
+	return len;
+}
+
+static ssize_t asus_lcd_clk_dbg_proc_read(struct file *file, char __user *buf,
+                    size_t count, loff_t *ppos)
+{
+	int len = 0;
+	ssize_t ret = 0;
+	char *buff;
+
+	buff = kmalloc(100, GFP_KERNEL);
+	if (!buff)
+		return -ENOMEM;
+
+	len += sprintf(buff, "%d\n", asus_lcd_clk_debug);
+
+	ret = simple_read_from_buffer(buf, count, ppos, buff, len);
+	kfree(buff);
+
+	return ret;
+}
+
+static struct file_operations asus_lcd_clk_dbg_proc_ops = {
+	.write = asus_lcd_clk_dbg_proc_write,
+	.read = asus_lcd_clk_dbg_proc_read,
+};
+
 /*
  * asus_lcd_reg_write
  * write command to tcon and save result to buffer
@@ -5906,6 +5954,7 @@ static int dsi_display_bind(struct device *dev,
 		proc_create(ASUS_EARLY_ON_PROC_FILE,   0666, NULL, &asus_lcd_early_on_proc_ops);
 		proc_create(ASUS_MIPI_PROC_FILE,  0666, NULL, &asus_lcd_mipi_proc_ops);
 		proc_create(ASUS_BKLT_CTL_PROC_FILE,   0666, NULL, &asus_lcd_bklt_control_proc_ops);
+		proc_create(ASUS_CLK_DBG_PROC_FILE,    0666, NULL, &asus_lcd_clk_dbg_proc_ops);
 		asus_lcd_procfs_registered = true;
 	}
 

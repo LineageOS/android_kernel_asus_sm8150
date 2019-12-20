@@ -59,7 +59,6 @@ extern void asus_lcd_cabc_restore(void);
 extern char asus_lcd_cabc_mode[2];
 extern int asus_lcd_dimming_on;
 extern int asus_lcd_early_backlight;
-extern int asus_lcd_bridge_enable;
 
 enum dsi_dsc_ratio_type {
 	DSC_8BPC_8BPP,

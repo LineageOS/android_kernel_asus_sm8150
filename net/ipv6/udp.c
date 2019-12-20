@@ -66,9 +66,6 @@ static bool udp6_lib_exact_dif_match(struct net *net, struct sk_buff *skb)
 	return false;
 }
 
-extern bool need_network_uid;
-extern void set_network_uid(int uid);
-
 static u32 udp6_ehashfn(const struct net *net,
 			const struct in6_addr *laddr,
 			const u16 lport,
@@ -898,10 +895,6 @@ int __udp6_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 
 	/* Unicast */
 	sk = __udp6_lib_lookup_skb(skb, uh->source, uh->dest, udptable);
-    if(sk && need_network_uid) {
-		printk(KERN_INFO "%s,udp6 wakeup sock uid: %d\n", __func__, sk->sk_uid.val);
-		set_network_uid(sk->sk_uid.val);
-	}
 	if (sk) {
 		if (!uh->check && !udp_sk(sk)->no_check6_rx)
 			goto report_csum_error;

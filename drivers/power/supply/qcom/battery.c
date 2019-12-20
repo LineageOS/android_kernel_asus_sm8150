@@ -1605,6 +1605,7 @@ static void handle_usb_change(struct pl_data *chip)
 	}
 }
 
+int battery_voter_complete = 0;
 static void status_change_work(struct work_struct *work)
 {
 	struct pl_data *chip = container_of(work,
@@ -1619,6 +1620,8 @@ static void status_change_work(struct work_struct *work)
 		rerun_election(chip->usb_icl_votable);
 		rerun_election(chip->fcc_votable);
 		rerun_election(chip->fv_votable);
+		
+		battery_voter_complete = 1;
 	}
 
 	if (!chip->main_psy)

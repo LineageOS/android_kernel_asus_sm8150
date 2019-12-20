@@ -585,19 +585,38 @@ int g_pmode_tp_en(struct i2c_client *client, int mode)
 static ssize_t switch_gesture_mode_proc_write(struct file *filp, const char *buff, size_t len, loff_t *off)
 {
     int tmp = 0;
+    int i = 0;
+    int j = 0;
     u8 gesturetmp = 0;
     char gesture_buf[16];
+    char gesture_buf1[16];
     char cmpchar = '1';
 
     memset(gesture_buf, 0, sizeof(gesture_buf));
-    printk("[Focal][touch] switch_gesture_mode_proc_write %s ! \n", gesture_buf);
+    memset(gesture_buf1, 0, sizeof(gesture_buf));
 
     if (len > 16)
         len = 16;
     if (copy_from_user(gesture_buf, buff, len))
         return -EFAULT;
 
-    if (gesture_buf[0] == cmpchar) {
+//    printk("[Focal][touch] switch_gesture_mode_proc_write gesture_buf= %s ! \n", gesture_buf);
+    for (j = 0, i = len -1; i >= 0; j++, i--)
+    {
+        gesture_buf1[j] = gesture_buf[i];
+//        printk("gesture_buf1[%d] %c", j, gesture_buf1[j]);
+    }
+//    printk("[Focal][touch] gesture_buf1[0] %c ! \n", gesture_buf1[0]);
+//    printk("[Focal][touch] gesture_buf1[1] %c ! \n", gesture_buf1[1]);
+//    printk("[Focal][touch] gesture_buf1[2] %c ! \n", gesture_buf1[2]);
+//    printk("[Focal][touch] gesture_buf1[3] %c ! \n", gesture_buf1[3]);
+//    printk("[Focal][touch] gesture_buf1[4] %c ! \n", gesture_buf1[4]);
+//    printk("[Focal][touch] gesture_buf1[5] %c ! \n", gesture_buf1[5]);
+//    printk("[Focal][touch] gesture_buf1[6] %c ! \n", gesture_buf1[6]);
+    
+//    printk("[Focal][touch] switch_gesture_mode_proc_write gesture_buf1= %s ! \n", gesture_buf1);
+
+    if (gesture_buf1[0] == cmpchar) {
         fts_data->gesture_mode_eable = true;
         printk("[Focal][Touch] gesture_mode enable ! \n");
     } else {
@@ -607,11 +626,12 @@ static ssize_t switch_gesture_mode_proc_write(struct file *filp, const char *buf
 
     if (fts_data->gesture_mode_eable == 1) {
         for (tmp = 0; tmp < 7; tmp++) {
-            if (gesture_buf[tmp] == cmpchar) {
+            if (gesture_buf1[tmp] == cmpchar) {
                 gesturetmp |= (1 << tmp);
             }
         }
         fts_data->gesture_mode_type = gesturetmp;
+//        printk("[Focal][touch] gesturetmp %d ! \n", gesturetmp);
         if ((fts_data->gesture_mode_type & 1 << 6))
             FTS_gesture_register_d6 |= 0x10;
         else
@@ -647,6 +667,7 @@ static ssize_t switch_gesture_mode_proc_write(struct file *filp, const char *buf
         fts_data->gesture_mode_eable = 0;
         fts_data->gesture_mode_type = 0;
         FTS_gesture_register_d2 = 0;
+        FTS_gesture_register_d5 = 0;
         FTS_gesture_register_d6 = 0;
         FTS_gesture_register_d7 = 0;
         printk("[Focal][Touch] gesture_mode_disable ! \n");

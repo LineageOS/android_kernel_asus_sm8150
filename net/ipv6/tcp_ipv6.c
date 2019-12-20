@@ -68,8 +68,6 @@
 
 #include <crypto/hash.h>
 #include <linux/scatterlist.h>
-extern bool need_network_uid;
-extern void set_network_uid(int uid);
 
 static void	tcp_v6_send_reset(const struct sock *sk, struct sk_buff *skb);
 static void	tcp_v6_reqsk_send_ack(const struct sock *sk, struct sk_buff *skb,
@@ -1441,11 +1439,6 @@ lookup:
 				&refcounted);
 	if (!sk)
 		goto no_tcp_socket;
-
-	if(need_network_uid) {
-		printk(KERN_INFO "%s, tcp6 wakeup sock uid: %d\n", __func__, sk->sk_uid.val);
-		set_network_uid(sk->sk_uid.val);
-	}
 
 process:
 	if (sk->sk_state == TCP_TIME_WAIT)

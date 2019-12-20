@@ -3017,7 +3017,6 @@
 		qcom,fde-key-size;
 		qcom,appsbl-qseecom-support;
 		qcom,commonlib64-loaded-by-uefi;
-		qcom,qsee-reentrancy-support = <2>;
 	};
 
 	qcom_smcinvoke: smcinvoke@87900000 {

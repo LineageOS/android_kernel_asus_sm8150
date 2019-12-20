@@ -31,6 +31,7 @@
 #define DEFAULT_PANEL_PREFILL_LINES	25
 
 extern int fts_ts_resume(void);
+bool dsi_on = false;
 
 static struct dsi_display_mode_priv_info default_priv_info = {
 	.panel_jitter_numer = DEFAULT_PANEL_JITTER_NUMERATOR,
@@ -155,17 +156,17 @@ static int dsi_bridge_attach(struct drm_bridge *bridge)
 
 }
 
-bool dsi_on = false;
-
 static void dsi_bridge_pre_enable(struct drm_bridge *bridge)
 {
 	int rc = 0;
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
 
-	printk("[Display] dsi_bridge_pre_enable !!!\n");
-
-	if (dsi_on)
+	if (dsi_on) {
+		printk("[Display] DSI still on skip dsi_bridge_pre_enable.\n");
 		return;
+	} else {
+		printk("[Display] dsi_bridge_pre_enable\n");
+	}
 
 	if (!bridge) {
 		pr_err("Invalid params\n");
@@ -226,8 +227,12 @@ static void dsi_bridge_enable(struct drm_bridge *bridge)
 	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
 	struct dsi_display *display;
 
-	if (dsi_on)
+	if (dsi_on) {
+		printk("[Display] DSI still on skip dsi_bridge_enable.\n");
 		return;
+	} else {
+		printk("[Display] dsi_bridge_enable\n");
+	}
 
 	if (!bridge) {
 		pr_err("Invalid params\n");
@@ -980,24 +985,50 @@ extern struct mutex dsi_op_mutex;
 int display_early_init = 0;
 bool display_on_trig_by_early = false;
 
+extern int dsi_clk_examine_validity(void *client, enum dsi_clk_type clk, bool suspend_fix);
+void dsi_suspend_clock_check(struct drm_bridge *bridge)
+{
+	struct dsi_display *display;
+	struct dsi_bridge *c_bridge = to_dsi_bridge(bridge);
+
+	if (!bridge) {
+		pr_err("[Display] Invalid params\n");
+		return;
+	}
+
+	display = c_bridge->display;
+
+	dsi_clk_examine_validity(display->dsi_clk_handle,
+			DSI_CORE_CLK, true /* fix suspend state */);
+}
+
 void dsi_suspend(void)
 {
+	printk("[Display] dsi_suspend++\n");
+	mutex_lock(&dsi_op_mutex);
+
+	/*
+	 * check the DSI core clock status only is DSI is already turned off
+	 */
+	if (!dsi_on)
+		dsi_suspend_clock_check(bridge4pm);
+
 	/*
 	 * if display is trigger on by early on
 	 * when suspend called before the actual system has called
 	 * then we should turned off display here
 	 */
 	if (!display_on_trig_by_early)
-		return;
+		goto exit;
 	else
 		printk("[Display] disable bridge in suspend state.\n");
 
 	display_on_trig_by_early = false;
-	printk("[Display] dsi_suspend++\n");
-	mutex_lock(&dsi_op_mutex);
-	dsi_bridge_disable(bridge4pm);
-	dsi_bridge_post_disable(bridge4pm);
+	//dsi_bridge_disable(bridge4pm);
+	//dsi_bridge_post_disable(bridge4pm);
 	display_early_init = 0;
+
+exit:
 	mutex_unlock(&dsi_op_mutex);
 	printk("[Display] dsi_suspend--\n");
 }
@@ -1005,16 +1036,24 @@ EXPORT_SYMBOL(dsi_suspend);
 
 void dsi_resume(void)
 {
-	printk("[Display] dsi_resume++\n");
+	printk("[Display] dsi_resume ++\n");
 	mutex_lock(&dsi_op_mutex);
-	display_early_init = 1;
-	dsi_bridge_pre_enable(bridge4pm);
-	dsi_bridge_enable(bridge4pm);
 
-	/* mark display early on here, reset this flag by system calling */
-	display_on_trig_by_early = true;
+	/* last time is early init and not panel off yet */
+	if (display_early_init) {
+		printk("[Display] cancel early on, last time flag is still on.\n");
+	} else if (dsi_on) {
+		printk("[Display] cancel early on, panel may still on.\n");
+	} else {
+		/* mark display early on here, reset this flag by system calling */
+		display_on_trig_by_early = true;
+		display_early_init = 1;
+		dsi_bridge_pre_enable(bridge4pm);
+		dsi_bridge_enable(bridge4pm);
+	}
+
 	mutex_unlock(&dsi_op_mutex);
-	printk("[Display] dsi_resume---\n");
+	printk("[Display] dsi_resume --\n");
 }
 EXPORT_SYMBOL(dsi_resume);
 

@@ -6479,6 +6479,7 @@ extern int smb5_probe_complete;
 void asus_check_probe_work(struct work_struct *work)
 {
 	if(!smb5_probe_complete) {
+		CHG_DBG("call kernel restart!!!!!!!\n");
 		kernel_restart(NULL);
 	}
 }
@@ -8925,34 +8926,45 @@ void asus_usb_water_work(struct work_struct *work)
 //[---]ASUS : Add usb water alert feature
 
 //[+++]ASUS : Add usb thermal alert feature
+int read_usb_conn_temp(int *conn_temp)
+{
+	int rc;
+	
+	if (smbchg_dev->iio.connector_temp_chan) {
+		rc = iio_read_channel_processed(smbchg_dev->iio.connector_temp_chan,
+				conn_temp);
+		if (rc < 0) {
+			CHG_DBG_E("Error in reading connector_temp channel, rc=%d\n", rc);
+
+			//retry if read fail
+			rc = iio_read_channel_processed(smbchg_dev->iio.connector_temp_chan,
+				conn_temp);
+			if (rc < 0) {
+				CHG_DBG_E("Error in reading connector_temp channel retry, rc=%d\n", rc);
+				return rc;
+			}
+		}
+		*conn_temp = *conn_temp / 100;
+	}
+	
+	return rc;
+}
+
 void asus_usb_thermal_work(struct work_struct *work)
 {
 	struct smb_charger *chg = container_of(work, struct smb_charger,
 							asus_usb_thermal_work.work);
-	int rc;
+	int rc, i;
 	u8 reg;
 	int conn_temp, usb_present, otg_present;
 
 	if (!g_usb_thermal_enable || no_input_suspend_flag)
 		return;
 
-	if (chg->iio.connector_temp_chan) {
-		rc = iio_read_channel_processed(chg->iio.connector_temp_chan,
-				&conn_temp);
-		if (rc < 0) {
-			pr_err("Error in reading connector_temp channel, rc=%d", rc);
+	rc = read_usb_conn_temp(&conn_temp);
+	if (rc < 0)
+		return;
 
-			//retry if read fail
-			rc = iio_read_channel_processed(chg->iio.connector_temp_chan,
-				&conn_temp);
-			if (rc < 0) {
-				pr_err("Error in reading connector_temp channel retry, rc=%d", rc);
-				return;
-			}
-			
-		}
-		conn_temp = conn_temp / 100;
-	}
 	if (g_usb_thermal_debug)
 		conn_temp = g_usb_thermal_debug;
 
@@ -8967,6 +8979,14 @@ void asus_usb_thermal_work(struct work_struct *work)
 	otg_present = reg & OTG_EN_BIT;
 
 	if (!usb_thermal_once_flag && conn_temp >= 700) {
+		for(i=0; i<3; i++){
+			msleep(1000);
+
+			rc = read_usb_conn_temp(&conn_temp);
+			if(conn_temp < 700)
+				goto end;
+		}
+		
 		if (usb_present) {
 			if (!otg_present) {
 				//#1: 0x1340[0] = 1, Charger input suspend
@@ -8995,7 +9015,8 @@ void asus_usb_thermal_work(struct work_struct *work)
 		asus_extcon_set_state_sync(chg->thermal_extcon, THERMAL_ALERT_NONE);
 		CHG_DBG("conn_temp(%d) <= 600, disable usb suspend\n", conn_temp);
 	}
-	
+
+end:
 	CHG_DBG("conn_temp(%d), usb(%d), otg(%d), usb_connector = %d\n",
 			conn_temp, usb_present, otg_present, asus_extcon_get_state(smbchg_dev->thermal_extcon));
 

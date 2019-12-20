@@ -84,6 +84,8 @@ DEFINE_MUTEX(scm_lmh_lock);
 
 #endif
 
+extern int g_QPST_property;
+
 static int scm_remap_error(int err)
 {
 	switch (err) {
@@ -363,6 +365,7 @@ static int __scm_call2(u32 fn_id, struct scm_desc *desc, bool retry)
 	int arglen = desc->arginfo & 0xf;
 	int ret, retry_count = 0;
 	u64 x0;
+	static int count = 0;
 
 	if (unlikely(!is_scm_armv8()))
 		return -ENODEV;
@@ -404,8 +407,15 @@ static int __scm_call2(u32 fn_id, struct scm_desc *desc, bool retry)
 
 		if (ret == SCM_V2_EBUSY)
 			msleep(SCM_EBUSY_WAIT_MS);
-		if (retry_count == 33)
+		if (retry_count == 33) {
 			pr_warn("scm: secure world has been busy for 1 second!\n");
+			count++;
+		}
+		if((count == 3) &&(ret == SCM_V2_EBUSY)) {
+			if( g_QPST_property == 1) {
+				BUG_ON(1);
+			}
+		}
 	} while (ret == SCM_V2_EBUSY && (retry_count++ < SCM_EBUSY_MAX_RETRY));
 out:
 	trace_scm_call_end(desc);

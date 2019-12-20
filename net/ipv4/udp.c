@@ -117,9 +117,6 @@
 #include <net/addrconf.h>
 #include <net/udp_tunnel.h>
 
-extern bool need_network_uid;
-extern void set_network_uid(int uid);
-
 struct udp_table udp_table __read_mostly;
 EXPORT_SYMBOL(udp_table);
 
@@ -2235,10 +2232,6 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 						saddr, daddr, udptable, proto);
 
 	sk = __udp4_lib_lookup_skb(skb, uh->source, uh->dest, udptable);
-    if(sk && need_network_uid) {
-		printk(KERN_INFO "%s,udp wakeup sock uid: %d\n", __func__, sk->sk_uid.val);
-		set_network_uid(sk->sk_uid.val);
-	}
 	if (sk)
 		return udp_unicast_rcv_skb(sk, skb, uh);
 

@@ -1802,6 +1802,7 @@ EXPORT_SYMBOL(asus_lcd_trigger_early_on_wq);
 
 void asus_lcd_early_on_for_phone_call(void)
 {
+	return; //disabled
 	if (is_in_phone_call()) {
 		asus_lcd_trigger_early_on_wq();
 	}

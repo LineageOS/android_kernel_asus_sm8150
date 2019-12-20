@@ -597,9 +597,11 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 		if (data->payload_size >= param_id_pos * sizeof(uint32_t))
 				param_id = payload[param_id_pos - 1];
 		else {
-			pr_err("%s: Error: size %d is less than expected\n",
-				__func__, data->payload_size);
-			return -EINVAL;
+			param_id = payload[param_id_pos - 1];
+			pr_err("%s: Error: opcode = 0x%x size %d is less than expected, but still working ahead without return(param_id = 0x%x)\n",
+				__func__,data->opcode , data->payload_size, param_id);
+			/* ASUS_BSP workaround for AMP calibration in user version */
+			//return -EINVAL;
 		}
 
 		if (param_id == AFE_PARAM_ID_DEV_TIMING_STATS) {
@@ -647,9 +649,10 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 		payload = data->payload;
 		if (data->opcode == APR_BASIC_RSP_RESULT) {
 			if (data->payload_size < (2 * sizeof(uint32_t))) {
-				pr_err("%s: Error: size %d is less than expected\n",
+				pr_err("%s: Error: APR_BASIC_RSP_RESULT payload size %d is less than expected, but still working ahead without return\n",
 					__func__, data->payload_size);
-				return -EINVAL;
+				/* ASUS_BSP workaround for AMP calibration in user version */
+				//return -EINVAL;
 			}
 			pr_debug("%s:opcode = 0x%x cmd = 0x%x status = 0x%x token=%d\n",
 				__func__, data->opcode,

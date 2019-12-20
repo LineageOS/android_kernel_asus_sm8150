@@ -865,7 +865,7 @@ static int tavil_put_anc_func(struct snd_kcontrol *kcontrol,
 
 	mutex_lock(&tavil->codec_mutex);
 	tavil->anc_func = (!ucontrol->value.integer.value[0] ? false : true);
-	dev_dbg(codec->dev, "%s: anc_func %x", __func__, tavil->anc_func);
+	dev_err(codec->dev, "%s: anc_func %x", __func__, tavil->anc_func);
 
 	if (tavil->anc_func == true) {
 		snd_soc_dapm_enable_pin(dapm, "ANC EAR PA");
@@ -2078,7 +2078,7 @@ static int tavil_codec_enable_rx_bias(struct snd_soc_dapm_widget *w,
 	struct snd_soc_codec *codec = snd_soc_dapm_to_codec(w->dapm);
 	struct tavil_priv *tavil = snd_soc_codec_get_drvdata(codec);
 
-	dev_dbg(codec->dev, "%s %s %d\n", __func__, w->name, event);
+	dev_err(codec->dev, "%s %s %d\n", __func__, w->name, event);
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
@@ -2240,7 +2240,7 @@ static int tavil_codec_enable_hphr_pa(struct snd_soc_dapm_widget *w,
 	struct tavil_dsd_config *dsd_conf = tavil->dsd_config;
 	int ret = 0;
 
-	dev_dbg(codec->dev, "%s %s %d\n", __func__, w->name, event);
+	dev_err(codec->dev, "%s %s %d\n", __func__, w->name, event);
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
@@ -2399,7 +2399,7 @@ static int tavil_codec_enable_hphl_pa(struct snd_soc_dapm_widget *w,
 	struct tavil_dsd_config *dsd_conf = tavil->dsd_config;
 	int ret = 0;
 
-	dev_dbg(codec->dev, "%s %s %d\n", __func__, w->name, event);
+	dev_err(codec->dev, "%s %s %d\n", __func__, w->name, event);
 
 	switch (event) {
 	case SND_SOC_DAPM_PRE_PMU:
@@ -2557,7 +2557,7 @@ static int tavil_codec_enable_lineout_pa(struct snd_soc_dapm_widget *w,
 	struct tavil_priv *tavil = snd_soc_codec_get_drvdata(codec);
 	struct tavil_dsd_config *dsd_conf = tavil->dsd_config;
 
-	dev_dbg(codec->dev, "%s %s %d\n", __func__, w->name, event);
+	dev_err(codec->dev, "%s %s %d\n", __func__, w->name, event);
 
 	if (w->reg == WCD934X_ANA_LO_1_2) {
 		if (w->shift == 7) {
@@ -8697,7 +8697,7 @@ static int tavil_hw_params(struct snd_pcm_substream *substream,
 	struct tavil_priv *tavil = snd_soc_codec_get_drvdata(dai->codec);
 	int ret = 0;
 
-	dev_dbg(tavil->dev, "%s: dai_name = %s DAI-ID %x rate %d num_ch %d\n",
+	dev_err(tavil->dev, "%s: dai_name = %s DAI-ID %x rate %d num_ch %d\n",
 		 __func__, dai->name, dai->id, params_rate(params),
 		 params_channels(params));
 
@@ -9413,7 +9413,7 @@ int tavil_cdc_mclk_tx_enable(struct snd_soc_codec *codec, bool enable)
 	clk_mode = test_bit(CLK_MODE, &tavil_p->status_mask);
 	clk_internal = test_bit(CLK_INTERNAL, &tavil_p->status_mask);
 
-	dev_dbg(codec->dev, "%s: clkmode: %d, enable: %d, clk_internal: %d\n",
+	dev_err(codec->dev, "%s: clkmode: %d, enable: %d, clk_internal: %d\n",
 		__func__, clk_mode, enable, clk_internal);
 
 	if (clk_mode || clk_internal) {

@@ -4391,6 +4391,7 @@ static int smb5_show_charger_status(struct smb5 *chip)
 	return rc;
 }
 
+extern int battery_voter_complete;
 int smb5_probe_complete = 0;
 static int smb5_probe(struct platform_device *pdev)
 {
@@ -4398,6 +4399,7 @@ static int smb5_probe(struct platform_device *pdev)
 	struct smb_charger *chg;
 	struct gpio_control *gpio_ctrl;
 	int rc = 0;
+	int wait_count = 0;
 
 	CHG_DBG("+++\n");
 
@@ -4595,6 +4597,11 @@ static int smb5_probe(struct platform_device *pdev)
 	if (rc < 0) {
 		pr_err("Couldn't request interrupts rc=%d\n", rc);
 		goto cleanup;
+	}
+
+	while(!battery_voter_complete && wait_count<10) {
+		msleep(100);
+		wait_count++;
 	}
 
 	rc = smb5_post_init(chip);

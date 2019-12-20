@@ -7019,6 +7019,18 @@ static int batt_safety_csc_restore(void){
 	return rc;
 }
 
+static void batt_safety_csc_stop(void){
+
+	cancel_delayed_work(&battery_safety_work);
+	BAT_DBG("Done! \n");
+}
+
+static void batt_safety_csc_start(void){
+
+	schedule_delayed_work(&battery_safety_work, 0);
+	BAT_DBG("Done! \n");
+}
+
 //ASUS_BS battery health upgrade +++
 static void batt_health_upgrade_debug_enable(bool enable){
 
@@ -7107,6 +7119,7 @@ static const struct file_operations batt_health_config_fops = {
 
 //ASUS_BS battery health upgrade ---
 
+#if 0
 static int batt_safety_csc_getcyclecount(void){
 	char buf[30]={0};
 	int rc;
@@ -7123,6 +7136,7 @@ static int batt_safety_csc_getcyclecount(void){
 	BAT_DBG("Done! rc(%d)\n",rc);
 	return rc;
 }
+#endif
 
 static ssize_t batt_safety_csc_proc_write(struct file *file,const char __user *buffer,size_t count,loff_t *pos)
 {
@@ -7141,20 +7155,20 @@ static ssize_t batt_safety_csc_proc_write(struct file *file,const char __user *b
 	sscanf(start, "%d", &value);
 
 	switch(value){
-		case 0: //erase
+		case 0: //erase battery safety
 			batt_safety_csc_erase();
-		break;
-		case 1: //backup /persist to /sdcard
+			break;
+		case 1: //backup battery safety
 			batt_safety_csc_backup();
-		break;
-		case 2: //resotre /sdcard from /persist 
+			break;
+		case 2: //resotre battery safety
 			batt_safety_csc_restore();
-		break;
-		case 3: //write cycle count to /sdcard
-			batt_safety_csc_getcyclecount();
-		break;
-		case 4: //copy bat_health_data to /sdcard from /persist
-			batt_health_csc_backup();
+			break;
+		case 3: //stop battery safety upgrade
+			batt_safety_csc_stop();
+			break;
+		case 4: //start safety upgrade
+			batt_safety_csc_start();
 			break;
 		case 5: // disable battery health debug log
 			batt_health_upgrade_debug_enable(false);
@@ -7167,6 +7181,9 @@ static ssize_t batt_safety_csc_proc_write(struct file *file,const char __user *b
 			break;
 		case 8: // enable battery health upgrade
 			batt_health_upgrade_enable(true);
+			break;
+		case 9: //initial battery safety upgrade
+			init_batt_cycle_count_data();
 			break;
 		default:
 			BAT_DBG_E("input error!Now return\n");

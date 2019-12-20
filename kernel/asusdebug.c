@@ -294,6 +294,7 @@ static const struct file_operations proc_asusdebugprop_operations = {
 };
 
 int g_QPST_property = 0;
+EXPORT_SYMBOL(g_QPST_property);
 extern void set_QPSTInfo_dloadmode(int mode);
 
 static ssize_t QPSTInfo_read(struct file *file, char __user *buf,
