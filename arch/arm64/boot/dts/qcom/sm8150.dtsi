@@ -691,7 +691,7 @@
 		// Total = 99D00000
 		ramoops: ramoops {
 			compatible = "removed-dma-pool", "ramoops";
-			reg = <0 0x99E00000 0 0x00100000>;
+			reg = <0 0x99D00000 0 0x00100000>;
 			record-size = <0x20000>;
 			console-size = <0x40000>;
 			pmsg-size = <0x20000>;
