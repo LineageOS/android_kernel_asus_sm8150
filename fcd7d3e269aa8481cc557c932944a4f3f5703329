@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "80af1912_9d7fcbd3",
+        "filename": "arch/arm64/boot/dts/qcom/sm8150.dtsi",
+        "patchSetId": 1
+      },
+      "lineNbr": 691,
+      "author": {
+        "id": 11883
+      },
+      "writtenOn": "2020-04-03T15:38:11Z",
+      "side": 1,
+      "message": "Starts from\n0x98900000+0x1400000\u003d0x99D00000\nEnd to\n0x99D00000+0x00100000\u003d0x99E00000\n\n0x99E00000 \u003c 0x9E400000 so it fits before qseecom_mem",
+      "range": {
+        "startLine": 691,
+        "startChar": 0,
+        "endLine": 691,
+        "endChar": 21
+      },
+      "revId": "fcd7d3e269aa8481cc557c932944a4f3f5703329",
+      "serverId": "1ec6b3db-b2c1-4fa4-84a2-4c7efe89ba71",
+      "unresolved": true
+    }
+  ]
+}
