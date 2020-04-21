@@ -1191,7 +1191,7 @@ void smblib_hvdcp_detect_enable(struct smb_charger *chg, bool enable)
 {
 	int rc;
 	u8 mask;
-
+return; //WA for aohai adapter
 	if (chg->hvdcp_disable || chg->pd_not_supported)
 		return;
 
@@ -5238,6 +5238,7 @@ void asus_typec_removal_function(struct smb_charger *chg)
 	cancel_delayed_work(&chg->asus_min_monitor_work);
 	cancel_delayed_work(&chg->asus_batt_RTC_work);
 	cancel_delayed_work(&chg->asus_set_flow_flag_work);
+	cancel_delayed_work(&chg->asus_check_vbus_work);
 	alarm_cancel(&bat_alarm);
 	asus_flow_processing = 0;
 	asus_CHG_TYPE = 0;
@@ -5358,8 +5359,9 @@ void smblib_asus_monitor_start(struct smb_charger *chg, int time)
 	
 	if(LEGACY_CABLE_FLAG == 0 && !(smbchg_dev->pd_active))
 		schedule_delayed_work(&smbchg_dev->asus_cable_capability_check_work, msecs_to_jiffies(12000));
-		
-	schedule_delayed_work(&chg->asus_enable_inov_work, msecs_to_jiffies(60000));
+
+	schedule_delayed_work(&smbchg_dev->asus_enable_inov_work, msecs_to_jiffies(60000));
+	schedule_delayed_work(&chg->asus_check_vbus_work, msecs_to_jiffies(60000)); // WA for aohai adapter
 }
 
 static int SW_recharge(struct smb_charger *chg)
@@ -6378,6 +6380,12 @@ void asus_insertion_initial_settings(struct smb_charger *chg)
 	if (rc < 0) {
 		dev_err(chg->dev, "Couldn't set default LEGACY_CABLE_DET_WINDOW rc=%d\n", rc);
 	}
+	
+//WA for aohai adapter
+	rc = smblib_write(chg, 0x1362, 0x1E);
+	if (rc < 0) {
+		dev_err(chg->dev, "Couldn't set 0x1362 to 0x1E rc=%d\n", rc);
+	}
 }
 
 void asus_set_flow_flag_work(struct work_struct *work)
@@ -6474,6 +6482,47 @@ void asus_enable_inov_work(struct work_struct *work)
 	usb_present = asus_get_prop_usb_present(smbchg_dev);
 	asus_enable_inov(usb_present);
 }
+
+// WA for aohai adapter +++
+void asus_check_vbus_work(struct work_struct *work)
+{
+	int rc;
+	union power_supply_propval voltage_val;
+	u8 stat;
+	int i;
+	
+	smblib_get_prop_usb_voltage_now(smbchg_dev, &voltage_val);
+	
+	rc = smblib_read(smbchg_dev, APSD_RESULT_STATUS_REG, &stat);
+	if (rc < 0)
+		CHG_DBG_E("Couldn't read APSD_RESULT_STATUS rc=%d\n", rc);
+	
+	CHG_DBG("input_voltage = %d, 0x1308 = 0x%x", voltage_val.intval, stat);
+	if((voltage_val.intval < 8000000) && stat == 0x48){
+		for(i=0; i<20; i++){
+			rc = smblib_write(smbchg_dev, 0x1343, 0x01);
+			if (rc < 0)
+				CHG_DBG_E("Couldn't set 0x1362 to 0x3E rc=%d\n", rc);
+		
+			msleep(100);
+		}
+		
+		msleep(5000);
+		
+		smblib_get_prop_usb_voltage_now(smbchg_dev, &voltage_val);
+		
+		if(voltage_val.intval < 5250000){
+			rc = smblib_write(smbchg_dev, 0x1343, 0x10);
+			if (rc < 0)
+				CHG_DBG_E("Couldn't set 0x1343 to 0x10 rc=%d\n", rc);
+		}
+		
+		rc = asus_exclusive_vote(smbchg_dev->usb_icl_votable, ASUS_ICL_VOTER, true, 1750000);
+		if (rc < 0)
+			CHG_DBG_E("Failed to set USBIN_CURRENT_LIMIT to 500mA\n");
+	}
+}
+// WA for aohai adapter ---
 
 extern int smb5_probe_complete;
 void asus_check_probe_work(struct work_struct *work)
@@ -9297,6 +9346,7 @@ int smblib_init(struct smb_charger *chg)
 	INIT_DELAYED_WORK(&chg->asus_reverse_charge_check_camera, asus_reverse_charge_check_camera);
 	INIT_DELAYED_WORK(&chg->asus_enable_inov_work, asus_enable_inov_work);
 	INIT_DELAYED_WORK(&chg->asus_check_probe_work, asus_check_probe_work);
+	INIT_DELAYED_WORK(&chg->asus_check_vbus_work, asus_check_vbus_work); // WA for aohai adapter
 //[---]ASUS work
 
 	INIT_DELAYED_WORK(&chg->icl_change_work, smblib_icl_change_work);

@@ -607,19 +607,23 @@ static long audio_cal_shared_ioctl(struct file *file, unsigned int cmd,
 	/* ASUS_BSP --- */
 
 	/* ASUS_BSP +++ Add uevent for receiver checking */
-        case AUDIO_SET_ACTIVEOUTPUT_PID:
+	case AUDIO_SET_ACTIVEOUTPUT_PID:
 		mutex_lock(&audio_cal.cal_mutex[AUDIO_SET_ACTIVEOUTPUT_PID_TYPE]);
 		if (copy_from_user(&active_outputpid, (void *)arg, sizeof(active_outputpid))) {
-                        pr_err("%s: Could not copy state from user\n", __func__);
-                        ret = -EFAULT;
-                }
-                printk("active_outputpid=%d\n", active_outputpid);
-		if (active_outputpid == 0) {
-			send_rcv_notification_uevent(0);	/* previous outputpid's track was removed */
+			pr_err("%s: Could not copy state from user\n", __func__);
+			ret = -EFAULT;
 		}
-                mutex_unlock(&audio_cal.cal_mutex[AUDIO_SET_ACTIVEOUTPUT_PID_TYPE]);
-                goto done;
-        /* ASUS_BSP --- */
+		printk("active_outputpid=%d\n", active_outputpid);
+		if (active_outputpid == 0) {
+			/* previous outputpid's track was removed */
+			send_rcv_notification_uevent(0);
+		} else {
+			/* outputpid's track is added */
+			send_rcv_notification_uevent(rcv_device);
+		}
+		mutex_unlock(&audio_cal.cal_mutex[AUDIO_SET_ACTIVEOUTPUT_PID_TYPE]);
+		goto done;
+	/* ASUS_BSP --- */
 
 	/* ASUS_BSP +++ Audio mode */
 	case AUDIO_SET_MODE:

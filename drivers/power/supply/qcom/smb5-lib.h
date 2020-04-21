@@ -493,6 +493,7 @@ struct smb_charger {
 	struct delayed_work	asus_reverse_charge_check_camera;
 	struct delayed_work	asus_enable_inov_work;
 	struct delayed_work	asus_check_probe_work;
+	struct delayed_work	asus_check_vbus_work;
 
 	/* asus variables */
 	bool asus_print_usb_src_change;  //Trim the log of usb_source_change_irq
