@@ -56,12 +56,11 @@ int check_pa_temp(void){
   int result = 0;
   bool cur_use_pa_status = 0;
   cur_use_pa_status = G_use_pa_flag;
-	if(G_pa_therm1_temp < 33000){
+	if(G_pa_therm1_temp < 30000){
 		result = (G_pa_therm1_temp - 1000);
-		return result;
 	}
 	//if(G_pa_therm1_temp > 35000){
-	if(G_pa_therm1_temp > (G_skin_therm_temp - 1000)){
+	if(G_pa_therm1_temp > (G_skin_therm_temp - 3000)){
 		result = (G_skin_therm_temp - 10000);
 		G_use_pa_flag = false;
 	} else {
