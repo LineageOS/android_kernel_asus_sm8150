@@ -10282,10 +10282,7 @@ static ssize_t audio_debug_proc_read(struct file *filp, char __user *buff, size_
         if (len > 256)
                 len = 256;
 
-        //if (g_DebugMode)
-        //        sprintf(messages, "audio debug mode\n");
-        //else {
-                switch (g_tavil_priv->mbhc->wcd_mbhc.current_plug) {
+        switch (g_tavil_priv->mbhc->wcd_mbhc.current_plug) {
                 case MBHC_PLUG_TYPE_HEADSET:
                         sprintf(messages, "1\n");
                         break;
@@ -10304,8 +10301,7 @@ static ssize_t audio_debug_proc_read(struct file *filp, char __user *buff, size_
                 default:
                         sprintf(messages, "0\n");
                         break;
-                }
-        //}
+        }
 
         if (copy_to_user(buff, messages, len))
                 return -EFAULT;
