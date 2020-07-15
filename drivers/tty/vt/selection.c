@@ -14,6 +14,7 @@
 #include <linux/tty.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
+#include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/types.h>
 
@@ -41,7 +42,7 @@ static volatile int sel_start = -1; 	/* cleared by clear_selection */
 static int sel_end;
 static int sel_buffer_lth;
 static char *sel_buffer;
-
+static DEFINE_MUTEX(sel_lock);
 /* clear_selection, highlight and highlight_pointer can be called
    from interrupt (via scrollback/front) */
 
@@ -160,7 +161,7 @@ int set_selection(const struct tiocl_selection __user *sel, struct tty_struct *t
 	char *bp, *obp;
 	int i, ps, pe, multiplier;
 	u16 c;
-	int mode;
+	int mode, ret = 0;
 
 	poke_blanked_console();
 
@@ -199,7 +200,6 @@ int set_selection(const struct tiocl_selection __user *sel, struct tty_struct *t
 		ps = pe;
 		pe = tmp;
 	}
-
 	if (sel_cons != vc_cons[fg_console].d) {
 		clear_selection();
 		sel_cons = vc_cons[fg_console].d;
@@ -321,7 +321,8 @@ int set_selection(const struct tiocl_selection __user *sel, struct tty_struct *t
 		}
 	}
 	sel_buffer_lth = bp - sel_buffer;
-	return 0;
+
+	return ret;
 }
 
 /* Insert the contents of the selection buffer into the
@@ -349,10 +350,13 @@ int paste_selection(struct tty_struct *tty)
 	tty_buffer_lock_exclusive(&vc->port);
 
 	add_wait_queue(&vc->paste_wait, &wait);
+	mutex_lock(&sel_lock);
 	while (sel_buffer && sel_buffer_lth > pasted) {
 		set_current_state(TASK_INTERRUPTIBLE);
 		if (tty_throttled(tty)) {
+			mutex_unlock(&sel_lock);
 			schedule();
+			mutex_lock(&sel_lock);
 			continue;
 		}
 		__set_current_state(TASK_RUNNING);
@@ -361,6 +365,7 @@ int paste_selection(struct tty_struct *tty)
 					      count);
 		pasted += count;
 	}
+	mutex_unlock(&sel_lock);
 	remove_wait_queue(&vc->paste_wait, &wait);
 	__set_current_state(TASK_RUNNING);
 
